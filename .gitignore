@@ -1,14 +1,24 @@
-.superpowers/
+# Build output
 .build/
-*.sqlite
-.DS_Store
-.env
+*.noindex/
 App/Forge.xcodeproj/
 App/build*/
+
+# Xcode user state
 *.xcuserstate
 xcuserdata/
 
-*.noindex/
+# Local data and secrets
+*.sqlite
+.env
+
+# Local tool and editor state
+.DS_Store
+.superpowers/
 CLAUDE.local.md
 docs/superpowers/
-tools/icon-work/sheet-2.png
+
+# Icon design explorations (only the final sources used by tools/make-icon.sh are tracked)
+tools/icon-work/*
+!tools/icon-work/icon-ios.svg
+!tools/icon-work/icon-mac.svg
