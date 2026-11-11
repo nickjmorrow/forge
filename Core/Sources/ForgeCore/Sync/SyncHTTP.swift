@@ -1,6 +1,6 @@
 import Foundation
 
-/// The hub's HTTP API as a pure function, so it can be tested without sockets; `forge-sync` only does the networking.
+/// The hub's HTTP API as a pure function, so it can be tested without sockets; `forge sync-serve` only does the networking.
 ///
 ///     POST /sync/pull?since=N    → [RemoteOp]
 ///     POST /sync/push            {device, ops:[OutgoingOp]} → [SeqAssignment]
@@ -47,7 +47,7 @@ public struct SyncHTTP: Sendable {
 
 public enum SyncHTTPError: Error, Equatable { case status(Int, String) }
 
-/// Talks to a `forge-sync` server with this device's bearer token.
+/// Talks to a `forge sync-serve` hub with this device's bearer token.
 public final class HTTPSyncTransport: SyncTransport, @unchecked Sendable {
     let base: URL
     let token: String

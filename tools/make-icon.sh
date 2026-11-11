@@ -1,5 +1,5 @@
 #!/bin/sh
-# Renders the Forge app icon (an ember flame on indigo ink; source: tools/icon-work/flame-iterations.mjs, variant E0) from tools/icon-work/icon-{ios,mac}.svg into the asset catalogs. Needs resvg (brew install resvg).
+# Renders the Forge app icon (an ember flame on indigo ink) from tools/icon-work/icon-{ios,mac}.svg into the asset catalogs. Needs resvg (brew install resvg).
 set -e
 root="$(cd "$(dirname "$0")/.." && pwd)"
 ios="$root/App/iOS/Assets.xcassets/AppIcon.appiconset"
