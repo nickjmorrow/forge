@@ -1,0 +1,14 @@
+.superpowers/
+.build/
+*.sqlite
+.DS_Store
+.env
+App/Forge.xcodeproj/
+App/build*/
+*.xcuserstate
+xcuserdata/
+
+*.noindex/
+CLAUDE.local.md
+docs/superpowers/
+tools/icon-work/sheet-2.png

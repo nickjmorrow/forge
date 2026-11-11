@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nicholai.forge-hub</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/CHANGEME/.local/bin/forge</string>
+    <string>sync-serve</string>
+    <string>--db</string><string>/Users/CHANGEME/forge-hub/forge.sqlite</string>
+    <string>--tokens</string><string>/Users/CHANGEME/forge-hub/tokens.json</string>
+    <string>--port</string><string>8790</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/CHANGEME/forge-hub/hub.log</string>
+  <key>StandardErrorPath</key><string>/Users/CHANGEME/forge-hub/hub.log</string>
+</dict>
+</plist>
