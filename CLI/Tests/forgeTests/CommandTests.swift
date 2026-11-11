@@ -24,6 +24,14 @@ private func json(_ s: String) throws -> [String: Any] {
 }
 
 @Suite struct CommandTests {
+    @Test(arguments: [["--help"], [], ["routine"], ["export", "--help"]])
+    func helpPrintsUsageAndExitsZero(_ args: [String]) async {
+        let r = await Runner.run(args)
+        #expect(r.code == 0)
+        #expect(r.out.contains("USAGE:"))
+        #expect(r.err.isEmpty)
+    }
+
     @Test func exerciseDeleteWithHistoryExitsNonzeroWithJSONError() async throws {
         let path = tempDB()
         let f = try seed(path)

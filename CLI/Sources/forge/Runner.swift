@@ -43,6 +43,8 @@ enum Runner {
             if var async = command as? AsyncParsableCommand { try await async.run() } else { try command.run() }
             return RunResult(code: 0, out: buffer.text, err: "")
         } catch {
+            // Asking for help (`forge --help`, `forge routine`) reaches here as an error that means "success".
+            if !(error is ForgeError), ForgeCommand.exitCode(for: error) == .success { return RunResult(code: 0, out: ForgeCommand.fullMessage(for: error) + "\n", err: "") }
             let message = (error as? ForgeError)?.message ?? "\(error)"
             let data = (try? JSONSerialization.data(withJSONObject: ["error": message], options: [.sortedKeys])) ?? Data()
             return RunResult(code: 1, out: "", err: String(decoding: data, as: UTF8.self) + "\n")
