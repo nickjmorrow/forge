@@ -92,8 +92,12 @@ enum Store {
             let position: Int = r["position"]
             return ExerciseBlock(exerciseID: r["exercise_id"], notes: r["notes"], restSeconds: r["rest_seconds"],
                                  supersetID: r["superset_id"], repsMin: r["reps_min"], repsMax: r["reps_max"],
-                                 sets: setsByPosition[position] ?? [])
+                                 alternatives: decodeAlternatives(r["alternatives"]), sets: setsByPosition[position] ?? [])
         }
+    }
+
+    static func decodeAlternatives(_ json: String?) -> [String]? {
+        json.flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
     }
 
     /// Same as `makeBlocks`, for rows selected with the explicit column lists in `decodeWorkouts` (read by position).
@@ -106,7 +110,7 @@ enum Store {
         }
         return exerciseRows.map { r in
             ExerciseBlock(exerciseID: r[2], notes: r[3], restSeconds: r[4], supersetID: r[5], repsMin: r[6], repsMax: r[7],
-                          sets: setsByPosition[r[1] as Int] ?? [])
+                          alternatives: decodeAlternatives(r[8]), sets: setsByPosition[r[1] as Int] ?? [])
         }
     }
 
@@ -117,7 +121,7 @@ enum Store {
         for chunk in stride(from: 0, to: ids.count, by: 500).map({ Array(ids[$0..<min($0 + 500, ids.count)]) }) {
             let marks = chunk.map { _ in "?" }.joined(separator: ",")
             // Explicit column lists and index access: decoding by column name dominates when there are tens of thousands of sets.
-            for r in try Row.fetchAll(db, sql: "SELECT workout_id, position, exercise_id, notes, rest_seconds, superset_id, reps_min, reps_max FROM workout_exercises WHERE workout_id IN (\(marks)) ORDER BY workout_id, position", arguments: StatementArguments(chunk)) {
+            for r in try Row.fetchAll(db, sql: "SELECT workout_id, position, exercise_id, notes, rest_seconds, superset_id, reps_min, reps_max, alternatives FROM workout_exercises WHERE workout_id IN (\(marks)) ORDER BY workout_id, position", arguments: StatementArguments(chunk)) {
                 exercisesByWorkout[r[0], default: []].append(r)
             }
             for r in try Row.fetchAll(db, sql: "SELECT workout_id, exercise_position, type, weight_kg, reps, duration_seconds, distance_meters, rpe, completed FROM workout_sets WHERE workout_id IN (\(marks)) ORDER BY workout_id, exercise_position, position", arguments: StatementArguments(chunk)) {
@@ -134,8 +138,9 @@ enum Store {
 
     static func writeBlocks(_ blocks: [ExerciseBlock], table: String, setTable: String, keyColumn: String, key: String, _ db: Database) throws {
         for (i, b) in blocks.enumerated() {
-            try db.execute(sql: "INSERT INTO \(table) (\(keyColumn), position, exercise_id, notes, rest_seconds, superset_id, reps_min, reps_max) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                           arguments: [key, i, b.exerciseID, b.notes, b.restSeconds, b.supersetID, b.repsMin, b.repsMax])
+            try db.execute(sql: "INSERT INTO \(table) (\(keyColumn), position, exercise_id, notes, rest_seconds, superset_id, reps_min, reps_max, alternatives) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           arguments: [key, i, b.exerciseID, b.notes, b.restSeconds, b.supersetID, b.repsMin, b.repsMax,
+                                       try b.alternatives.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }])
             for (j, s) in b.sets.enumerated() {
                 try db.execute(sql: """
                     INSERT INTO \(setTable) (\(keyColumn), exercise_position, position, type, weight_kg, reps, duration_seconds, distance_meters, rpe, completed)

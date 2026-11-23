@@ -237,6 +237,37 @@ public final class WorkoutSession {
         restAlerts?.update(rest: rest)
     }
 
+    // MARK: either/or
+
+    /// Does one of the slot's alternatives instead: the two trade places, and the sets take what that exercise did last time
+    /// (moved on a step when the slot progresses in a rep range). Refused once a set is ticked, so done work is never relabelled.
+    public func chooseAlternative(exercise index: Int, _ id: String) {
+        guard workout.exercises.indices.contains(index), let at = workout.exercises[index].alternatives?.firstIndex(of: id),
+              !workout.exercises[index].sets.contains(where: \.completed) else { return }
+        workout.exercises[index].alternatives![at] = workout.exercises[index].exerciseID
+        workout.exercises[index].exerciseID = id
+        loadPrevious(id)
+        let last = previous[id] ?? []
+        for j in workout.exercises[index].sets.indices {
+            let source = last.isEmpty ? nil : last[min(j, last.count - 1)]
+            workout.exercises[index].sets[j].weightKg = source?.weightKg
+            workout.exercises[index].sets[j].reps = source?.reps
+            workout.exercises[index].sets[j].durationSeconds = source?.durationSeconds
+            workout.exercises[index].sets[j].distanceMeters = source?.distanceMeters
+        }
+        if let range = workout.exercises[index].repRange, Progression.applies(to: (try? forge.exercise(id: id))?.tracking ?? .weightReps),
+           let suggestion = Progression.next(after: last, range: range, stepKg: weightStepKg) {
+            workout.exercises[index].sets = Progression.apply(suggestion, to: workout.exercises[index].sets)
+        }
+        if workout.isOffDay {
+            for j in workout.exercises[index].sets.indices {
+                workout.exercises[index].sets[j].weightKg = workout.exercises[index].sets[j].weightKg.map { lighter($0, exercise: index) }
+            }
+        }
+        revision += 1
+        persist()
+    }
+
     // MARK: off day
 
     /// An off day's weight for this exercise. Assistance is left alone: less of it would be harder, not lighter.

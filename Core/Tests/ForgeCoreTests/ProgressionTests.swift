@@ -97,3 +97,29 @@ private func done(_ w: Double?, _ r: Int?, _ type: SetType = .normal) -> SetEntr
         }
     }
 }
+
+@Suite struct AlternativesTests {
+    @Test func alternativesSurviveSavingAndAnEmptyListIsNone() throws {
+        let f = try Forge.inMemory()
+        try f.perform([.putExercise(Exercise(id: "bench", name: "Bench")), .putExercise(Exercise(id: "press", name: "Machine Press"))], author: .me)
+        let routine = Routine(id: "r", title: "R", exercises: [ExerciseBlock(exerciseID: "bench", alternatives: ["press"], sets: [SetEntry(weightKg: 50, reps: 8)]),
+                                                                 ExerciseBlock(exerciseID: "press", alternatives: [])])
+        try f.perform([.putRoutine(routine)], author: .me)
+        #expect(try f.routine(id: "r") == routine)
+        #expect(try f.routine(id: "r")?.exercises.map(\.alternatives) == [["press"], nil])
+        let w = Workout(id: "w", title: "A", startedAt: 1, exercises: routine.exercises)
+        try f.perform([.putWorkout(w)], author: .me)
+        #expect(try f.workout(id: "w") == w)
+        #expect(try f.workouts().first == w)
+    }
+
+    @Test func inputsTakeAlternativesByNameOrIdAndRejectUnknownOnes() throws {
+        let f = try Forge.inMemory()
+        try f.perform([.putExercise(Exercise(id: "bench", name: "Bench")), .putExercise(Exercise(id: "press", name: "Machine Press")),
+                       .putExercise(Exercise(id: "dip", name: "Dip"))], author: .me)
+        let input = try JSONDecoder().decode(RoutineInput.self, from: Data(#"{"title":"R","exercises":[{"exercise":"Bench","alternatives":["machine press","dip"]}]}"#.utf8))
+        #expect(try f.putRoutine(input, author: .claude).exercises[0].alternatives == ["press", "dip"])
+        let bad = try JSONDecoder().decode(RoutineInput.self, from: Data(#"{"title":"R","exercises":[{"exercise":"Bench","alternatives":["Nope"]}]}"#.utf8))
+        #expect(throws: ForgeError.self) { try f.putRoutine(bad, author: .claude) }
+    }
+}

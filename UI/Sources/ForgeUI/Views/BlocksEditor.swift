@@ -9,6 +9,8 @@ struct BlocksEditor: View {
     var showsRest = true
     var showsCompletion = false
     @State private var showPicker = false
+    /// The exercise an alternative is being picked for.
+    @State private var alternativeFor: Int?
     @State private var revision = 0
 
     private func tracking(_ id: String) -> TrackingType { model.exercises.first { $0.id == id }?.tracking ?? .weightReps }
@@ -46,6 +48,17 @@ struct BlocksEditor: View {
                     }
                 }
             }
+            if showsRest {
+                ForEach(blocks[i].alternatives ?? [], id: \.self) { id in
+                    HStack {
+                        Text("or").foregroundStyle(Theme.dim)
+                        Text(model.name(for: id))
+                        Spacer()
+                        Button("Remove \(model.name(for: id)) as an alternative", systemImage: "minus.circle") { removeAlternative(i, id) }
+                            .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(Theme.dim)
+                    }
+                }
+            }
             ForEach(Array(blocks[i].sets.indices), id: \.self) { j in
                 if blocks[i].sets.indices.contains(j) { setRow(i, j, trackingType) }
             }
@@ -60,10 +73,20 @@ struct BlocksEditor: View {
                 Text(model.name(for: blocks[i].exerciseID))
                 Spacer()
                 Menu {
+                    if showsRest { Button("Add Alternative", systemImage: "arrow.triangle.branch") { alternativeFor = i } }
                     Button("Move Up", systemImage: "arrow.up") { move(i, by: -1) }.disabled(i == 0)
                     Button("Move Down", systemImage: "arrow.down") { move(i, by: 1) }.disabled(i == blocks.count - 1)
                     Button("Remove", systemImage: "trash", role: .destructive) { blocks.remove(at: i); revision += 1 }
                 } label: { Image(systemName: "ellipsis.circle") }
+            }
+            // On this exercise's own header (the list is lazy, so a row further down may not exist to present from), and only
+            // for this exercise, so one sheet presents.
+            .sheet(isPresented: Binding(get: { alternativeFor == i }, set: { if !$0 { alternativeFor = nil } })) {
+                ExercisePickerView { id in
+                    guard blocks.indices.contains(i), id != blocks[i].exerciseID, !(blocks[i].alternatives ?? []).contains(id) else { return }
+                    blocks[i].alternatives = (blocks[i].alternatives ?? []) + [id]
+                    revision += 1
+                }
             }
         }.listRowBackground(Theme.card)
     }
@@ -96,6 +119,12 @@ struct BlocksEditor: View {
         .swipeActions(edge: .trailing) {
             Button("Delete", systemImage: "trash", role: .destructive) { blocks[i].sets.remove(at: j); revision += 1 }
         }
+    }
+
+    private func removeAlternative(_ i: Int, _ id: String) {
+        let rest = (blocks[i].alternatives ?? []).filter { $0 != id }
+        blocks[i].alternatives = rest.isEmpty ? nil : rest
+        revision += 1
     }
 
     private func move(_ i: Int, by delta: Int) {

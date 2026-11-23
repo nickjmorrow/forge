@@ -31,6 +31,7 @@ public struct ActiveWorkoutView: View {
                         let exercise = model.exercise(for: block.exerciseID)
                         ExerciseCard(session: session, blockID: row.id, index: row.index, count: session.blockIDs.count, block: block,
                                      setIDs: row.setIDs, previous: session.previous[block.exerciseID] ?? [],
+                                     alternatives: (block.alternatives ?? []).compactMap { id in model.exercise(for: id).map { Alternative(id: id, name: $0.name) } },
                                      aim: session.workout.isOffDay ? nil : Aim.text(block: block, previous: session.previous[block.exerciseID] ?? [],
                                                                                     tracking: exercise?.tracking ?? .weightReps, stepKg: model.weightStepKg, unit: model.unit),
                                      stopwatchStartedAt: session.stopwatch?.blockID == row.id ? session.stopwatch?.startedAt : nil,
@@ -44,6 +45,14 @@ public struct ActiveWorkoutView: View {
                     Button { showPicker = true } label: { Label("Add Exercise", systemImage: "plus") }
                         .buttonStyle(QuietButtonStyle())
                         .padding(.top, 4)
+                    // Finishing is also here, where the thumb already is after the last set; it lights up once every set is ticked.
+                    if loggedCount > 0 {
+                        if loggedCount == allSets.count {
+                            Button("Finish Workout") { finish() }.buttonStyle(AccentButtonStyle())
+                        } else {
+                            Button("Finish Workout") { finish() }.buttonStyle(QuietButtonStyle())
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -133,6 +142,12 @@ struct SetRowItem: Identifiable {
     }
 }
 
+/// Another exercise that can fill a slot ("or …").
+struct Alternative: Equatable, Identifiable {
+    let id: String
+    let name: String
+}
+
 /// The line under an exercise's name that says what its rep range asks for today.
 enum Aim {
     static func text(block: ExerciseBlock, previous: [SetEntry], tracking: TrackingType, stepKg: Double, unit: WeightUnit) -> String? {
@@ -185,6 +200,8 @@ private struct ExerciseCard: View, Equatable {
     let block: ExerciseBlock
     let setIDs: [UUID]
     let previous: [SetEntry]
+    /// The exercises that can be done instead of this one.
+    let alternatives: [Alternative]
     /// What the exercise's rep range asks for today; nil when it has none.
     let aim: String?
     /// When this exercise's stopwatch started; nil while it isn't running.
@@ -199,7 +216,7 @@ private struct ExerciseCard: View, Equatable {
     /// Everything the card shows; the session and the closure are how it acts, not what it displays.
     static func == (a: ExerciseCard, b: ExerciseCard) -> Bool {
         a.blockID == b.blockID && a.index == b.index && a.count == b.count && a.block == b.block && a.setIDs == b.setIDs && a.previous == b.previous
-            && a.aim == b.aim && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
+            && a.alternatives == b.alternatives && a.aim == b.aim && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
     }
 
     var body: some View {
@@ -222,6 +239,7 @@ private struct ExerciseCard: View, Equatable {
                 }
                 .accessibilityLabel("Exercise options")
             }
+            if !alternatives.isEmpty, !block.sets.contains(where: \.completed) { alternativesRow }
             TextField("", text: Binding(get: { block.notes ?? "" }, set: { text in if let i = session.blockIndex(blockID) { session.setNotes(exercise: i, text) } }),
                       prompt: Text("Notes").foregroundStyle(Theme.dim))
                 .font(.subheadline)
@@ -254,6 +272,26 @@ private struct ExerciseCard: View, Equatable {
 
     private func move(_ delta: Int) {
         if let i = session.blockIndex(blockID) { session.moveExercise(from: i, to: min(max(0, i + delta), count - 1)) }
+    }
+
+    /// "or …": tap one to do it instead. Offered until a set is ticked.
+    private var alternativesRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text("or").font(.caption.weight(.semibold)).foregroundStyle(Theme.dim)
+                ForEach(alternatives) { choice in
+                    Button { if let i = session.blockIndex(blockID) { session.chooseAlternative(exercise: i, choice.id) } } label: {
+                        Text(choice.name).font(.caption.weight(.semibold)).lineLimit(1)
+                            .padding(.horizontal, 12).frame(minHeight: 44)
+                            .foregroundStyle(Theme.text)
+                            .background(Capsule().fill(Theme.field).frame(height: 30))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Do \(choice.name) instead")
+                }
+            }
+        }
     }
 
     /// Timed exercises (a run, a hold) get a stopwatch; stopping it writes the time into the next set that isn't done.

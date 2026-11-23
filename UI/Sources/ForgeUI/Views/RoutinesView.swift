@@ -265,6 +265,12 @@ private struct ExerciseSummaryRow: View {
     @Environment(AppModel.self) private var model
     let block: ExerciseBlock
 
+    /// "A or B" for the exercises that can be done instead; nil when there are none.
+    private var alternativeNames: String? {
+        let names = (block.alternatives ?? []).compactMap { model.exercise(for: $0)?.name }
+        return names.isEmpty ? nil : names.joined(separator: " or ")
+    }
+
     var body: some View {
         let tracking = model.exercise(for: block.exerciseID)?.tracking ?? .weightReps
         VStack(alignment: .leading, spacing: 10) {
@@ -278,6 +284,7 @@ private struct ExerciseSummaryRow: View {
                 Label("Rest " + RestOptions.shortLabel(for: block.restSeconds, defaultSeconds: model.defaultRestSeconds), systemImage: "timer")
                     .font(.callout.monospacedDigit()).foregroundStyle(Theme.dim)
             }
+            if let names = alternativeNames { Text("or " + names).font(.callout).foregroundStyle(Theme.dim).lineLimit(2) }
             FlowLayout(spacing: 8) {
                 ForEach(Array(SetRowItem.items(sets: block.sets, ids: block.sets.map { _ in UUID() }, previous: []).enumerated()), id: \.offset) { _, set in
                     HStack(spacing: 6) {
@@ -299,6 +306,7 @@ private struct ExerciseRow: View {
     @Environment(AppModel.self) private var model
     @Binding var block: ExerciseBlock
     let onRemove: () -> Void
+    @State private var pickingAlternative = false
 
     private var tracking: TrackingType { model.exercise(for: block.exerciseID)?.tracking ?? .weightReps }
 
@@ -340,6 +348,7 @@ private struct ExerciseRow: View {
                     .help("Rest between sets")
                     Menu {
                         Button("Add Set", systemImage: "plus", action: addSet)
+                        Button("Add Alternative…", systemImage: "arrow.triangle.branch") { pickingAlternative = true }
                         Divider()
                         Button("Remove Exercise", systemImage: "trash", role: .destructive, action: onRemove)
                     } label: { Image(systemName: "ellipsis") }
@@ -348,6 +357,22 @@ private struct ExerciseRow: View {
                         .fixedSize()
                         .tint(Theme.dim)
                         .help("More")
+                }
+                if let alternatives = block.alternatives {
+                    FlowLayout(spacing: 8) {
+                        Text("or").font(.callout).foregroundStyle(Theme.dim).frame(height: 26)
+                        ForEach(alternatives, id: \.self) { id in
+                            HStack(spacing: 4) {
+                                Text(model.name(for: id)).font(.callout).lineLimit(1)
+                                Button { removeAlternative(id) } label: { Image(systemName: "xmark").font(.caption2.weight(.bold)) }
+                                    .buttonStyle(.plain).foregroundStyle(Theme.dim)
+                                    .help("Remove this alternative")
+                                    .accessibilityLabel("Remove \(model.name(for: id)) as an alternative")
+                            }
+                            .padding(.horizontal, 10).frame(height: 26)
+                            .background(Capsule().fill(Theme.field))
+                        }
+                    }
                 }
                 FlowLayout(spacing: 8) {
                     ForEach(Array(block.sets.indices), id: \.self) { j in
@@ -365,6 +390,17 @@ private struct ExerciseRow: View {
             }
         }
         .contentShape(Rectangle())
+        .sheet(isPresented: $pickingAlternative) {
+            ExercisePickerView { id in
+                guard id != block.exerciseID, !(block.alternatives ?? []).contains(id) else { return }
+                block.alternatives = (block.alternatives ?? []) + [id]
+            }
+        }
+    }
+
+    private func removeAlternative(_ id: String) {
+        let rest = (block.alternatives ?? []).filter { $0 != id }
+        block.alternatives = rest.isEmpty ? nil : rest
     }
 
     private func label(_ j: Int) -> String {

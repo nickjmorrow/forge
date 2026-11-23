@@ -37,12 +37,16 @@ public struct ExerciseBlock: Codable, Sendable, Equatable {
     /// and reps restart at `repsMin`. Nil means "repeat last time".
     public var repsMin: Int?
     public var repsMax: Int?
+    /// Other exercises that can fill this slot instead ("do this or this"): ids, in the order to offer them. Nil when none.
+    public var alternatives: [String]?
     public var sets: [SetEntry]
 
     public init(exerciseID: String, notes: String? = nil, restSeconds: Int = 0, supersetID: Int? = nil,
-                repsMin: Int? = nil, repsMax: Int? = nil, sets: [SetEntry] = []) {
+                repsMin: Int? = nil, repsMax: Int? = nil, alternatives: [String]? = nil, sets: [SetEntry] = []) {
         self.exerciseID = exerciseID; self.notes = notes; self.restSeconds = restSeconds
-        self.supersetID = supersetID; self.repsMin = repsMin; self.repsMax = repsMax; self.sets = sets
+        self.supersetID = supersetID; self.repsMin = repsMin; self.repsMax = repsMax
+        self.alternatives = (alternatives?.isEmpty ?? true) ? nil : alternatives
+        self.sets = sets
     }
 
     public var repRange: ClosedRange<Int>? {

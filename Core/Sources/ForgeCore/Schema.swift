@@ -148,6 +148,13 @@ enum Schema {
             ALTER TABLE workout_exercises ADD COLUMN reps_max INTEGER;
             """)
         }
+        m.registerMigration("v6") { db in
+            // "Do this or this": the other exercises that can fill a slot, as a JSON array of exercise ids.
+            try db.execute(sql: """
+            ALTER TABLE routine_exercises ADD COLUMN alternatives TEXT;
+            ALTER TABLE workout_exercises ADD COLUMN alternatives TEXT;
+            """)
+        }
         return m
     }
 }

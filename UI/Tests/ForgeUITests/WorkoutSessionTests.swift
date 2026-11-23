@@ -714,3 +714,53 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         #expect(s.workout.exercises[0].sets[0].weightKg == 30)
     }
 }
+
+@MainActor @Suite struct AlternativeSessionTests {
+    private func routine() -> Routine {
+        Routine(id: "r1", title: "Chest", exercises: [
+            ExerciseBlock(exerciseID: "bench", alternatives: ["fly"], sets: [SetEntry(weightKg: 80, reps: 6), SetEntry(weightKg: 80, reps: 6)]),
+        ], createdAt: 1, updatedAt: 1)
+    }
+
+    @Test func choosingAnAlternativeTradesPlacesAndTakesItsLastNumbers() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(routine()),
+                       .putWorkout(Workout(title: "A", startedAt: 1000, exercises: [ExerciseBlock(exerciseID: "fly", sets: [done(20, 12)])]))], author: .me)
+        let s = try WorkoutSession.start(routine: routine(), forge: f, store: nil, now: t0)
+        s.chooseAlternative(exercise: 0, "fly")
+        #expect(s.workout.exercises[0].exerciseID == "fly" && s.workout.exercises[0].alternatives == ["bench"])
+        #expect(s.workout.exercises[0].sets.map(\.weightKg) == [20, 20])            // a second set repeats the last one done
+        #expect(s.workout.exercises[0].sets.map(\.reps) == [12, 12])
+        #expect(s.previous["fly"]?.count == 1)
+    }
+
+    @Test func anAlternativeNeverDoneStartsBlankAndOneNotOfferedIsRefused() throws {
+        let f = try lib()
+        let s = try WorkoutSession.start(routine: routine(), forge: f, store: nil, now: t0)
+        s.chooseAlternative(exercise: 0, "row")
+        #expect(s.workout.exercises[0].exerciseID == "bench")
+        s.chooseAlternative(exercise: 0, "fly")
+        #expect(s.workout.exercises[0].sets.allSatisfy { $0.weightKg == nil && $0.reps == nil })
+    }
+
+    @Test func switchingIsRefusedOnceASetIsDone() throws {
+        let f = try lib()
+        let s = try WorkoutSession.start(routine: routine(), forge: f, store: nil, now: t0)
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        s.chooseAlternative(exercise: 0, "fly")
+        #expect(s.workout.exercises[0].exerciseID == "bench")
+    }
+
+    @Test func finishingOnAnAlternativeLeavesTheSlotsOwnPlanAlone() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(routine())], author: .me)
+        let s = try WorkoutSession.start(routine: routine(), forge: f, store: nil, now: t0)
+        s.chooseAlternative(exercise: 0, "fly")
+        s.update(exercise: 0, set: 0) { $0.weightKg = 25; $0.reps = 10 }
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        let summary = try s.finish(now: t0.addingTimeInterval(60))
+        #expect(summary.routineUpdate == nil)
+        #expect(try f.routine(id: "r1") == routine())
+        #expect(try f.lastPerformance(exerciseID: "fly", before: .max)?.map(\.weightKg) == [25])
+    }
+}

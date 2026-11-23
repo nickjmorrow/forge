@@ -23,6 +23,8 @@ public struct BlockInput: Codable, Sendable {
     /// Rep range to progress in, e.g. 8 and 12 (give both or neither).
     public var repsMin: Int?
     public var repsMax: Int?
+    /// Other exercises that can fill this slot instead, by id or exact name.
+    public var alternatives: [String]?
     public var sets: [SetInput]?
 }
 
@@ -88,6 +90,7 @@ extension Forge {
             return ExerciseBlock(
                 exerciseID: try resolveExercise(id: b.exerciseID, name: b.exercise), notes: b.notes, restSeconds: b.restSeconds ?? 0,
                 supersetID: b.supersetID, repsMin: b.repsMin, repsMax: b.repsMax,
+                alternatives: try b.alternatives?.map { try exercise(id: $0) != nil ? $0 : try resolveExercise(id: nil, name: $0) },
                 sets: (b.sets ?? []).map { s in
                     SetEntry(type: s.type ?? .normal, weightKg: s.weightKg ?? s.weightLb.map { $0 / WeightConversion.poundsPerKg }, reps: s.reps,
                              durationSeconds: s.durationSeconds, distanceMeters: s.distanceMeters, rpe: s.rpe, completed: s.completed ?? setsCompleted)
