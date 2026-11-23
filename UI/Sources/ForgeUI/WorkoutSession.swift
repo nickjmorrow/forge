@@ -14,8 +14,14 @@ public struct FinishSummary: Equatable {
     /// Names of exercises where this workout beat an earlier best (heaviest weight or estimated 1-rep max).
     public var newRecords: [String]
     /// The routine as it is now that this workout's numbers were written into it; nil when nothing differed from the plan.
-    /// Finishing only ever changes the weights and reps of sets that were done (and adds extra sets); it never removes an exercise or a set.
+    /// Finishing only ever changes the numbers of sets that were done (and adds extra sets); it never removes an exercise or a set.
     public var routineUpdate: Routine?
+}
+
+/// A stopwatch counting up on one exercise, stored as its start time so it stays correct while the app is suspended.
+public struct ExerciseStopwatch: Equatable, Sendable {
+    public var blockID: UUID
+    public var startedAt: Date
 }
 
 /// A workout being logged. Every change is written to the draft store so a killed app resumes where it left off.
@@ -25,6 +31,8 @@ public final class WorkoutSession {
     /// What was done last time, by exercise id.
     public private(set) var previous: [String: [SetEntry]] = [:]
     public private(set) var rest = RestTimer()
+    /// The stopwatch that is running, if any (one at a time; not saved in the draft).
+    public private(set) var stopwatch: ExerciseStopwatch?
     /// Bumps when rows are added, removed or reordered, so screens holding typed text can rebuild their fields.
     public private(set) var revision = 0
     /// Stable identities for each exercise and each of its sets (not saved), so screens can animate rows and keep their state.
@@ -104,6 +112,7 @@ public final class WorkoutSession {
 
     public func removeExercise(at index: Int) {
         guard workout.exercises.indices.contains(index) else { return }
+        if stopwatch?.blockID == blockIDs[index] { stopwatch = nil }
         workout.exercises.remove(at: index)
         blockIDs.remove(at: index)
         setIDs.remove(at: index)
@@ -204,6 +213,31 @@ public final class WorkoutSession {
         restAlerts?.update(rest: rest)
     }
 
+    // MARK: stopwatch
+
+    /// Starts timing this exercise. A stopwatch already running elsewhere is stopped first, so its time is kept.
+    public func startStopwatch(exercise index: Int, now: Date = Date()) {
+        guard workout.exercises.indices.contains(index) else { return }
+        stopStopwatch(now: now)
+        stopwatch = ExerciseStopwatch(blockID: blockIDs[index], startedAt: now)
+    }
+
+    /// Stops the stopwatch and writes the elapsed time into the exercise's first set that isn't done (a new set when all are).
+    /// The set is left unticked, so a distance can still be typed.
+    public func stopStopwatch(now: Date = Date()) {
+        guard let running = stopwatch else { return }
+        stopwatch = nil
+        guard let index = blockIndex(running.blockID) else { return }
+        if !workout.exercises[index].sets.contains(where: { !$0.completed }) {
+            workout.exercises[index].sets.append(SetEntry())
+            setIDs[index].append(UUID())
+        }
+        let set = workout.exercises[index].sets.firstIndex { !$0.completed }!
+        workout.exercises[index].sets[set].durationSeconds = max(0, Int(now.timeIntervalSince(running.startedAt).rounded()))
+        revision += 1
+        persist()
+    }
+
     // MARK: finishing
 
     /// True once any set has been ticked off. Until then, leaving the workout loses nothing.
@@ -233,6 +267,7 @@ public final class WorkoutSession {
 
         // The workout and the routine's new numbers are one change, so one undo reverses both.
         try forge.perform([.putWorkout(saved)] + (routineUpdate.map { [Op.putRoutine($0)] } ?? []), author: .me)
+        stopwatch = nil
         saver?.clear()
         skipRest()
         let sets = saved.exercises.flatMap(\.sets)
@@ -242,11 +277,12 @@ public final class WorkoutSession {
     }
 
     public func discard() {
+        stopwatch = nil
         saver?.clear()
         skipRest()
     }
 
-    /// The routine with the completed sets' weights and reps written over the plan (sets not done keep theirs); nil when nothing differs.
+    /// The routine with the completed sets' numbers written over the plan (sets not done keep theirs); nil when nothing differs.
     private func routineWithUsedValues(now: Date) throws -> Routine? {
         guard let id = workout.routineID, var routine = try forge.routine(id: id) else { return nil }
         var changed = false
@@ -261,7 +297,8 @@ public final class WorkoutSession {
                 planned.completed = false
                 if j < routine.exercises[i].sets.count {
                     let old = routine.exercises[i].sets[j]
-                    if old.weightKg != set.weightKg || old.reps != set.reps {
+                    if old.weightKg != set.weightKg || old.reps != set.reps || old.durationSeconds != set.durationSeconds
+                        || old.distanceMeters != set.distanceMeters {
                         routine.exercises[i].sets[j] = planned
                         changed = true
                     }

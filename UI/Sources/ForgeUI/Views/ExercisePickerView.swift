@@ -16,6 +16,8 @@ struct ExercisePickerView: View {
         ExerciseSearch.results(search, in: model.exercises.filter { muscle == nil || $0.primaryMuscle == muscle })
     }
 
+    private var typedName: String { search.trimmingCharacters(in: .whitespaces) }
+
     var body: some View {
         NavigationStack {
             List {
@@ -39,6 +41,11 @@ struct ExercisePickerView: View {
                     .buttonStyle(.plain)
                     .listRowBackground(Theme.card)
                 }
+                // The toolbar's New button is hidden while the search field is open, so creating is offered in the results too.
+                if !typedName.isEmpty, !model.exercises.contains(where: { $0.name.caseInsensitiveCompare(typedName) == .orderedSame }) {
+                    Button { showNew = true } label: { Label("Create “\(typedName)”", systemImage: "plus") }
+                        .listRowBackground(Theme.card)
+                }
                 if results.isEmpty {
                     ContentUnavailableView(model.exercises.isEmpty ? "No exercises yet" : "No matches",
                                            systemImage: "dumbbell",
@@ -53,7 +60,7 @@ struct ExercisePickerView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) { Button("New", systemImage: "plus") { showNew = true } }
             }
-            .sheet(isPresented: $showNew) { ExerciseEditorView(exercise: nil) { id in onPick(id); dismiss() } }
+            .sheet(isPresented: $showNew) { ExerciseEditorView(exercise: nil, suggestedName: search) { id in onPick(id); dismiss() } }
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)

@@ -49,7 +49,7 @@ public struct ExerciseListView: View {
                     } label: { Label(muscle.map(Muscles.title) ?? "Filter", systemImage: "line.3.horizontal.decrease.circle") }
                 }
             }
-            .sheet(isPresented: $showNew) { ExerciseEditorView(exercise: nil) }
+            .sheet(isPresented: $showNew) { ExerciseEditorView(exercise: nil, suggestedName: search) }
         }
     }
 }

@@ -31,6 +31,7 @@ public struct ActiveWorkoutView: View {
                         let exercise = model.exercise(for: block.exerciseID)
                         ExerciseCard(session: session, blockID: row.id, index: row.index, count: session.blockIDs.count, block: block,
                                      setIDs: row.setIDs, previous: session.previous[block.exerciseID] ?? [],
+                                     stopwatchStartedAt: session.stopwatch?.blockID == row.id ? session.stopwatch?.startedAt : nil,
                                      name: model.name(for: block.exerciseID),
                                      caption: [exercise?.primaryMuscle.map(Muscles.title), exercise?.equipment.map(Muscles.title)].compactMap { $0 }.joined(separator: " · "),
                                      tracking: exercise?.tracking ?? .weightReps, unit: model.unit, defaultRest: model.defaultRestSeconds,
@@ -155,6 +156,8 @@ private struct ExerciseCard: View, Equatable {
     let block: ExerciseBlock
     let setIDs: [UUID]
     let previous: [SetEntry]
+    /// When this exercise's stopwatch started; nil while it isn't running.
+    let stopwatchStartedAt: Date?
     let name: String
     let caption: String
     let tracking: TrackingType
@@ -165,7 +168,7 @@ private struct ExerciseCard: View, Equatable {
     /// Everything the card shows; the session and the closure are how it acts, not what it displays.
     static func == (a: ExerciseCard, b: ExerciseCard) -> Bool {
         a.blockID == b.blockID && a.index == b.index && a.count == b.count && a.block == b.block && a.setIDs == b.setIDs && a.previous == b.previous
-            && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
+            && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
     }
 
     var body: some View {
@@ -208,6 +211,7 @@ private struct ExerciseCard: View, Equatable {
                 }
             }
             .motion(value: setIDs)
+            if tracking.columns.contains(.duration) { stopwatchRow.padding(.top, 6) }
             Button { if let i = session.blockIndex(blockID) { session.addSet(toExercise: i) } } label: { Label("Add Set", systemImage: "plus") }
                 .buttonStyle(QuietButtonStyle())
                 .padding(.top, 6)
@@ -218,6 +222,25 @@ private struct ExerciseCard: View, Equatable {
 
     private func move(_ delta: Int) {
         if let i = session.blockIndex(blockID) { session.moveExercise(from: i, to: min(max(0, i + delta), count - 1)) }
+    }
+
+    /// Timed exercises (a run, a hold) get a stopwatch; stopping it writes the time into the next set that isn't done.
+    @ViewBuilder private var stopwatchRow: some View {
+        if let startedAt = stopwatchStartedAt {
+            HStack(spacing: 10) {
+                TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                    Text(Units.clock(seconds: Int(context.date.timeIntervalSince(startedAt))))
+                        .font(.title.weight(.bold).monospacedDigit()).foregroundStyle(Theme.accent)
+                        .contentTransition(.numericText())
+                }
+                .accessibilityLabel("Stopwatch")
+                Spacer()
+                Button("Stop") { session.stopStopwatch() }.buttonStyle(AccentButtonStyle(compact: true))
+            }
+        } else {
+            Button { if let i = session.blockIndex(blockID) { session.startStopwatch(exercise: i) } } label: { Label("Start Stopwatch", systemImage: "stopwatch") }
+                .buttonStyle(QuietButtonStyle())
+        }
     }
 
     /// The rest after this exercise's sets, adjustable per exercise: Off, the app default, or a fixed time.

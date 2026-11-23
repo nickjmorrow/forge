@@ -14,10 +14,11 @@ struct ExerciseEditorView: View {
 
     static let equipmentChoices = ["barbell", "dumbbell", "machine", "cable", "kettlebell", "band", "none", "other"]
 
-    init(exercise: Exercise?, onSaved: @escaping (String) -> Void = { _ in }) {
+    /// `suggestedName` starts a new exercise's name, e.g. with what was typed into the search that found nothing.
+    init(exercise: Exercise?, suggestedName: String = "", onSaved: @escaping (String) -> Void = { _ in }) {
         original = exercise
         self.onSaved = onSaved
-        _name = State(initialValue: exercise?.name ?? "")
+        _name = State(initialValue: exercise?.name ?? suggestedName.trimmingCharacters(in: .whitespaces))
         _equipment = State(initialValue: exercise?.equipment ?? "none")
         _muscle = State(initialValue: exercise?.primaryMuscle ?? "other")
         _tracking = State(initialValue: exercise?.tracking ?? .weightReps)

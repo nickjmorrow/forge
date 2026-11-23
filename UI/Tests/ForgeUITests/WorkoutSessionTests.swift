@@ -553,3 +553,50 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         #expect(aligned(s))
     }
 }
+
+@MainActor @Suite struct StopwatchTests {
+    private func holdSession() throws -> (Forge, WorkoutSession) {
+        let f = try lib()
+        try f.perform([.putExercise(Exercise(id: "hold", name: "Hold", tracking: .weightDuration)),
+                       .putRoutine(Routine(id: "r2", title: "Holds", exercises: [
+                           ExerciseBlock(exerciseID: "hold", sets: [SetEntry(weightKg: 50, durationSeconds: 30), SetEntry(weightKg: 50, durationSeconds: 30)])],
+                           createdAt: 1, updatedAt: 1))], author: .me)
+        return (f, try WorkoutSession.start(routine: try f.routine(id: "r2"), forge: f, store: nil, now: t0))
+    }
+
+    @Test func stoppingWritesElapsedTimeIntoTheFirstSetNotDone() throws {
+        let (_, s) = try holdSession()
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        s.startStopwatch(exercise: 0, now: t0)
+        #expect(s.stopwatch != nil)
+        s.stopStopwatch(now: t0.addingTimeInterval(42))
+        #expect(s.stopwatch == nil)
+        #expect(s.workout.exercises[0].sets[0].durationSeconds == 30)
+        #expect(s.workout.exercises[0].sets[1].durationSeconds == 42 && !s.workout.exercises[0].sets[1].completed)
+    }
+
+    @Test func stoppingWithEverySetDoneAddsASet() throws {
+        let (_, s) = try holdSession()
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        s.toggleComplete(exercise: 0, set: 1, now: t0)
+        s.startStopwatch(exercise: 0, now: t0)
+        s.stopStopwatch(now: t0.addingTimeInterval(5))
+        #expect(s.workout.exercises[0].sets.count == 3 && s.setIDs[0].count == 3)
+        #expect(s.workout.exercises[0].sets[2].durationSeconds == 5)
+    }
+
+    @Test func removingTheExerciseDropsItsStopwatch() throws {
+        let (_, s) = try holdSession()
+        s.startStopwatch(exercise: 0, now: t0)
+        s.removeExercise(at: 0)
+        #expect(s.stopwatch == nil)
+    }
+
+    @Test func finishingWritesAChangedHoldTimeIntoTheRoutine() throws {
+        let (f, s) = try holdSession()
+        s.update(exercise: 0, set: 0) { $0.durationSeconds = 45 }
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        _ = try s.finish(now: t0.addingTimeInterval(600))
+        #expect(try f.routine(id: "r2")?.exercises[0].sets.map(\.durationSeconds) == [45, 30])
+    }
+}
