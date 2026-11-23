@@ -19,16 +19,18 @@ struct BlocksEditor: View {
                 if blocks.indices.contains(i) { blockSection(i) }
             }
             Section {
+                // The sheet hangs off this one button: on the Group it would be attached to every section, and two sheets
+                // presenting at once close the whole editor.
                 Button { showPicker = true } label: { Label("Add Exercise", systemImage: "plus") }
+                    .sheet(isPresented: $showPicker) {
+                        ExercisePickerView { id in
+                            blocks.append(ExerciseBlock(exerciseID: id, restSeconds: 90, sets: showsCompletion ? [SetEntry(completed: true)] : [SetEntry(), SetEntry(), SetEntry()]))
+                            revision += 1
+                        }
+                    }
             }.listRowBackground(Theme.card)
         }
         .id(revision)
-        .sheet(isPresented: $showPicker) {
-            ExercisePickerView { id in
-                blocks.append(ExerciseBlock(exerciseID: id, restSeconds: 90, sets: showsCompletion ? [SetEntry(completed: true)] : [SetEntry(), SetEntry(), SetEntry()]))
-                revision += 1
-            }
-        }
     }
 
     @ViewBuilder private func blockSection(_ i: Int) -> some View {

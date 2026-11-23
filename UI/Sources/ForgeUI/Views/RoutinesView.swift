@@ -2,12 +2,17 @@
 import ForgeCore
 import SwiftUI
 
-/// Mac routines: the list on the left (drag to reorder), the whole selected routine on the right, edited in place and saved as you go.
+/// Mac routines: the list on the left (drag to reorder), the whole selected routine on the right, read-only until you press Edit.
 struct RoutinesView: View {
     @Environment(AppModel.self) private var model
     @State private var selection: String?
     @State private var created: String?
     @State private var deleting: Routine?
+    /// Set by the open routine while it has unsaved edits; leaving it then asks first.
+    @Binding var hasUnsavedEdits: Bool
+    @State private var pendingLeave: Leave?
+
+    private enum Leave { case select(String), new }
 
     var body: some View {
         NavigationStack {
@@ -19,7 +24,7 @@ struct RoutinesView: View {
             .background(Theme.background)
             .navigationTitle("Routines")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) { Button("New Routine", systemImage: "plus", action: newRoutine).help("New Routine") }
+                ToolbarItem(placement: .primaryAction) { Button("New Routine", systemImage: "plus") { leave(.new) }.help("New Routine") }
             }
             .onAppear { if selection == nil { selection = model.routines.first?.id } }
             .onChange(of: model.routines.map(\.id)) { _, ids in
@@ -30,6 +35,24 @@ struct RoutinesView: View {
                 Button("Delete Routine", role: .destructive) { if let r = deleting { model.deleteRoutine(id: r.id) } }
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Past workouts from it are kept.") }
+            .confirmationDialog("Discard your changes?", isPresented: Binding(get: { pendingLeave != nil }, set: { if !$0 { pendingLeave = nil } }),
+                                titleVisibility: .visible) {
+                Button("Discard Changes", role: .destructive) { if let l = pendingLeave { go(l) } }
+                Button("Keep Editing", role: .cancel) {}
+            } message: { Text("This routine has edits that haven't been saved.") }
+        }
+    }
+
+    /// Switching routines with unsaved edits asks first, since the draft would be lost.
+    private func leave(_ to: Leave) {
+        if case .select(let id) = to, id == selection { return }
+        if hasUnsavedEdits { pendingLeave = to } else { go(to) }
+    }
+
+    private func go(_ to: Leave) {
+        switch to {
+        case .select(let id): selection = id
+        case .new: newRoutine()
         }
     }
 
@@ -37,7 +60,7 @@ struct RoutinesView: View {
         // Selection is drawn here rather than by the system, which would paint it in the Mac's accent color instead of ink.
         List {
             ForEach(model.routines) { r in
-                Button { selection = r.id } label: {
+                Button { leave(.select(r.id)) } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(r.title.isEmpty ? "Untitled" : r.title).font(.body.weight(.medium)).foregroundStyle(Theme.text).lineLimit(1)
                         Text(RoutineMath.summary(r)).font(.caption).foregroundStyle(Theme.dim)
@@ -71,7 +94,7 @@ struct RoutinesView: View {
 
     @ViewBuilder private var detail: some View {
         if let routine = model.routines.first(where: { $0.id == selection }) {
-            RoutineDetail(routine: routine, focusesTitle: created == routine.id, onDelete: { deleting = routine })
+            RoutineDetail(routine: routine, startsEditing: created == routine.id, hasUnsavedEdits: $hasUnsavedEdits, onDelete: { deleting = routine })
                 .id(routine.id)
         } else if model.routines.isEmpty {
             ContentUnavailableView {
@@ -80,7 +103,7 @@ struct RoutinesView: View {
                 Text(model.exercises.isEmpty ? "Add the starter exercises, then build a routine from them." : "A routine is the plan your phone starts a workout from.")
             } actions: {
                 if model.exercises.isEmpty { Button("Add Starter Exercises") { model.addStarterLibrary() } }
-                Button("New Routine", action: newRoutine).buttonStyle(AccentButtonStyle(compact: true))
+                Button("New Routine") { leave(.new) }.buttonStyle(AccentButtonStyle(compact: true))
             }
         } else {
             ContentUnavailableView("Select a routine", systemImage: "list.bullet.rectangle")
@@ -95,36 +118,30 @@ struct RoutinesView: View {
     }
 }
 
-enum RoutineMath {
-    /// "6 exercises · 18 sets"
-    static func summary(_ r: Routine) -> String {
-        let sets = r.exercises.reduce(0) { $0 + $1.sets.count }
-        return "\(r.exercises.count) \(r.exercises.count == 1 ? "exercise" : "exercises") · \(sets) \(sets == 1 ? "set" : "sets")"
-    }
-}
-
-/// One routine laid out whole: a row per exercise with all its sets inline. Edits are saved shortly after you stop typing.
+/// One routine laid out whole. It opens read-only; Edit starts a draft that is written only by Save, and Reorder (while editing)
+/// collapses every exercise to one draggable line.
 private struct RoutineDetail: View {
     @Environment(AppModel.self) private var model
     let routine: Routine
-    let focusesTitle: Bool
     let onDelete: () -> Void
+    /// True while the draft differs from the saved routine, so the list can ask before switching away.
+    @Binding var hasUnsavedEdits: Bool
     @State private var draft: Routine
-    /// The routine as last saved or adopted; the draft differs from it while there are unsaved edits.
-    @State private var baseline: Routine
-    @State private var pendingSave: Task<Void, Never>?
+    @State private var editing: Bool
+    @State private var reordering = false
     @State private var showPicker = false
     @FocusState private var titleFocused: Bool
 
-    private static let saveDelay: Duration = .milliseconds(600)
-
-    init(routine: Routine, focusesTitle: Bool, onDelete: @escaping () -> Void) {
+    init(routine: Routine, startsEditing: Bool, hasUnsavedEdits: Binding<Bool>, onDelete: @escaping () -> Void) {
         self.routine = routine
-        self.focusesTitle = focusesTitle
         self.onDelete = onDelete
+        _hasUnsavedEdits = hasUnsavedEdits
         _draft = State(initialValue: routine)
-        _baseline = State(initialValue: routine)
+        _editing = State(initialValue: startsEditing)
     }
+
+    /// What is on screen: the draft while editing, otherwise the saved routine (so changes from Claude, sync or the phone show up).
+    private var shown: Routine { editing ? draft : routine }
 
     var body: some View {
         List {
@@ -132,58 +149,87 @@ private struct RoutineDetail: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 24, leading: 28, bottom: 16, trailing: 28))
-            ForEach(Array(draft.exercises.indices), id: \.self) { i in
-                if draft.exercises.indices.contains(i) {
-                    ExerciseRow(block: block(i), onRemove: { draft.exercises.remove(at: i) })
-                        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 28))
+            ForEach(Array(shown.exercises.indices), id: \.self) { i in
+                if shown.exercises.indices.contains(i) {
+                    row(i)
+                        .listRowInsets(EdgeInsets(top: reordering ? 6 : 12, leading: 28, bottom: reordering ? 6 : 12, trailing: 28))
                         .listRowBackground(Color.clear)
                         .listRowSeparatorTint(Theme.line.opacity(0.6))
                 }
             }
-            .onMove { source, destination in draft.exercises.move(fromOffsets: source, toOffset: destination) }
-            Button { showPicker = true } label: { Label("Add Exercise", systemImage: "plus") }
-                .buttonStyle(QuietButtonStyle(fills: false))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 16, leading: 28, bottom: 32, trailing: 28))
+            .onMove(perform: reordering ? { source, destination in draft.exercises.move(fromOffsets: source, toOffset: destination) } : nil)
+            if editing && !reordering {
+                Button { showPicker = true } label: { Label("Add Exercise", systemImage: "plus") }
+                    .buttonStyle(QuietButtonStyle(fills: false))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 16, leading: 28, bottom: 32, trailing: 28))
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .motion(value: reordering)
         .sheet(isPresented: $showPicker) {
             ExercisePickerView { id in
                 draft.exercises.append(ExerciseBlock(exerciseID: id, restSeconds: 90, sets: [SetEntry(), SetEntry(), SetEntry()]))
             }
             .forgeTheme()
         }
-        .onAppear { if focusesTitle { titleFocused = true } }
-        .onChange(of: draft) { _, new in if new != baseline { scheduleSave() } }
-        .onChange(of: routine) { _, saved in
-            // A change from elsewhere (Claude, sync, the phone) is shown unless you have unsaved edits here.
-            if draft == baseline { draft = saved; baseline = saved }
+        .onAppear { if editing { titleFocused = true } }
+        .onChange(of: editing ? draft != routine : false) { _, dirty in hasUnsavedEdits = dirty }
+        .onDisappear { hasUnsavedEdits = false }
+    }
+
+    @ViewBuilder private func row(_ i: Int) -> some View {
+        if reordering {
+            HStack(spacing: 10) {
+                Image(systemName: "line.3.horizontal").font(.body.weight(.medium)).foregroundStyle(Theme.dim).accessibilityHidden(true)
+                Text(model.name(for: shown.exercises[i].exerciseID)).font(.headline).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(RoutineMath.sets(shown.exercises[i].sets.count)).font(.callout).foregroundStyle(Theme.dim)
+            }
+            .contentShape(Rectangle())
+            .help("Drag to reorder")
+        } else if editing {
+            ExerciseRow(block: block(i), onRemove: { draft.exercises.remove(at: i) })
+        } else {
+            ExerciseSummaryRow(block: shown.exercises[i])
         }
-        .onDisappear { saveNow() }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField("Routine name", text: $draft.title)
-                .font(.largeTitle.weight(.bold))
-                .textFieldStyle(.plain)
-                .focused($titleFocused)
-                .onSubmit { saveNow() }
+            if editing {
+                TextField("Routine name", text: $draft.title)
+                    .font(.largeTitle.weight(.bold))
+                    .textFieldStyle(.plain)
+                    .focused($titleFocused)
+            } else {
+                Text(routine.title.isEmpty ? "Untitled" : routine.title).font(.largeTitle.weight(.bold))
+            }
             HStack(spacing: 12) {
-                StatLine(parts: [RoutineMath.summary(draft)])
+                StatLine(parts: [RoutineMath.summary(shown)])
                 Spacer(minLength: 12)
-                Menu {
-                    Button("Duplicate", systemImage: "plus.square.on.square") { saveNow(); model.duplicateRoutine(id: draft.id) }
-                    Divider()
-                    Button("Delete Routine", systemImage: "trash", role: .destructive, action: onDelete)
-                } label: { Image(systemName: "ellipsis.circle") }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .tint(Theme.dim)
-                    .help("More")
+                if editing {
+                    if draft.exercises.count > 1 {
+                        Button(reordering ? "Done Reordering" : "Reorder", systemImage: reordering ? "checkmark" : "arrow.up.arrow.down") { reordering.toggle() }
+                            .buttonStyle(QuietButtonStyle(fills: false))
+                    }
+                    Button("Cancel", action: cancel).buttonStyle(QuietButtonStyle(fills: false)).keyboardShortcut(.cancelAction)
+                    Button("Save", action: save).buttonStyle(AccentButtonStyle(compact: true)).keyboardShortcut("s")
+                } else {
+                    Button("Edit", systemImage: "pencil", action: startEditing).buttonStyle(QuietButtonStyle(fills: false)).keyboardShortcut("e")
+                    Menu {
+                        Button("Duplicate", systemImage: "plus.square.on.square") { model.duplicateRoutine(id: routine.id) }
+                        Divider()
+                        Button("Delete Routine", systemImage: "trash", role: .destructive, action: onDelete)
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .tint(Theme.dim)
+                        .help("More")
+                }
             }
         }
     }
@@ -194,26 +240,57 @@ private struct RoutineDetail: View {
                 set: { if draft.exercises.indices.contains(i) { draft.exercises[i] = $0 } })
     }
 
-    private func scheduleSave() {
-        pendingSave?.cancel()
-        pendingSave = Task {
-            try? await Task.sleep(for: Self.saveDelay)
-            if !Task.isCancelled { saveNow() }
-        }
+    private func startEditing() {
+        draft = routine
+        editing = true
     }
 
-    private func saveNow() {
-        pendingSave?.cancel()
-        // A routine deleted while an edit was pending stays deleted rather than being written back.
-        guard draft != baseline, model.routines.contains(where: { $0.id == draft.id }) else { return }
+    private func cancel() {
+        reordering = false
+        editing = false
+        draft = routine
+    }
+
+    private func save() {
         var toSave = draft
-        if toSave.title.trimmingCharacters(in: .whitespaces).isEmpty { toSave.title = baseline.title }
-        baseline = draft
-        model.saveRoutine(toSave)
+        if toSave.title.trimmingCharacters(in: .whitespaces).isEmpty { toSave.title = routine.title }
+        reordering = false
+        editing = false
+        if toSave != routine { model.saveRoutine(toSave) }
     }
 }
 
-/// An exercise in a routine: drag to reorder, its rest time, and every set as a compact chip you can type into.
+/// An exercise in a routine as you read it: its rest time and every set as plain text.
+private struct ExerciseSummaryRow: View {
+    @Environment(AppModel.self) private var model
+    let block: ExerciseBlock
+
+    var body: some View {
+        let tracking = model.exercise(for: block.exerciseID)?.tracking ?? .weightReps
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text(model.name(for: block.exerciseID)).font(.headline).lineLimit(1)
+                Spacer(minLength: 8)
+                Label("Rest " + RestOptions.shortLabel(for: block.restSeconds, defaultSeconds: model.defaultRestSeconds), systemImage: "timer")
+                    .font(.callout.monospacedDigit()).foregroundStyle(Theme.dim)
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(Array(SetRowItem.items(sets: block.sets, ids: block.sets.map { _ in UUID() }, previous: []).enumerated()), id: \.offset) { _, set in
+                    HStack(spacing: 6) {
+                        Text(set.label).font(.caption.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(set.entry.type == .normal ? Theme.dim : Theme.accent)
+                        Text(SetFormat.describe(set.entry, tracking: tracking, unit: model.unit)).font(.callout.monospacedDigit())
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(Capsule().fill(Theme.field))
+                }
+            }
+        }
+    }
+}
+
+/// An exercise in a routine being edited: its rest time, and every set as a compact chip you can type into.
 private struct ExerciseRow: View {
     @Environment(AppModel.self) private var model
     @Binding var block: ExerciseBlock
@@ -223,12 +300,6 @@ private struct ExerciseRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "line.3.horizontal")
-                .font(.body.weight(.medium))
-                .foregroundStyle(Theme.faint)
-                .frame(width: 18, height: 26)
-                .help("Drag to reorder")
-                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     Text(model.name(for: block.exerciseID)).font(.headline).lineLimit(1)
