@@ -7,9 +7,11 @@ struct ForgeWidgets: WidgetBundle {
     var body: some Widget { RestLiveActivityWidget() }
 }
 
-/// Ember: the fire accent on indigo ink (Theme in ForgeUI; the widget doesn't link it).
-private let accent = Color(red: 1.0, green: 0.541, blue: 0.239)
-private let ink = Color(red: 0.039, green: 0.043, blue: 0.098)
+/// The app icon's plate: vermilion flame on the oxblood fire tile, cream figures (the widget doesn't link ForgeUI's Theme).
+private let accent = Color(red: 0xCF / 255, green: 0x6F / 255, blue: 0x45 / 255)
+private let ink = Color(red: 0x2A / 255, green: 0x15 / 255, blue: 0x18 / 255)
+private let bone = Color(red: 0xE8 / 255, green: 0xDC / 255, blue: 0xC0 / 255)
+private let brass = Color(red: 0xC9 / 255, green: 0xA8 / 255, blue: 0x5C / 255)
 
 struct RestLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
@@ -17,16 +19,17 @@ struct RestLiveActivityWidget: Widget {
             HStack(spacing: 14) {
                 Image(systemName: "flame.fill").font(.title).foregroundStyle(accent)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Rest").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Rest").font(.subheadline).foregroundStyle(brass)
                     Text(timerInterval: Date.now...max(Date.now, context.state.endsAt), countsDown: true)
                         .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(bone)
                 }
                 Spacer()
                 ProgressView(timerInterval: Date.now...max(Date.now, context.state.endsAt), countsDown: true) { EmptyView() } currentValueLabel: { EmptyView() }
                     .progressViewStyle(.circular).tint(accent).frame(width: 44, height: 44)
             }
             .padding(16)
-            .activityBackgroundTint(ink.opacity(0.92))
+            .activityBackgroundTint(ink.opacity(0.96))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) { Image(systemName: "flame.fill").foregroundStyle(accent) }
