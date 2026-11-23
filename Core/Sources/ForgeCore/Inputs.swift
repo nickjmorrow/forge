@@ -20,6 +20,9 @@ public struct BlockInput: Codable, Sendable {
     public var notes: String?
     public var restSeconds: Int?
     public var supersetID: Int?
+    /// Rep range to progress in, e.g. 8 and 12 (give both or neither).
+    public var repsMin: Int?
+    public var repsMax: Int?
     public var sets: [SetInput]?
 }
 
@@ -39,6 +42,8 @@ public struct WorkoutInput: Codable, Sendable {
     public var endedAt: String?
     public var routineID: String?
     public var notes: String?
+    /// A deliberately lighter session: kept in history, never used as "last time".
+    public var offDay: Bool?
     public var exercises: [BlockInput]?
 }
 
@@ -77,9 +82,12 @@ extension Forge {
 
     func blocks(from inputs: [BlockInput]?, setsCompleted: Bool) throws -> [ExerciseBlock] {
         try (inputs ?? []).map { b in
-            ExerciseBlock(
+            guard (b.repsMin == nil) == (b.repsMax == nil), b.repsMin.map({ $0 >= 1 && $0 <= b.repsMax! }) ?? true else {
+                throw ForgeError.invalid("repsMin and repsMax go together, with 1 <= repsMin <= repsMax (e.g. 8 and 12)")
+            }
+            return ExerciseBlock(
                 exerciseID: try resolveExercise(id: b.exerciseID, name: b.exercise), notes: b.notes, restSeconds: b.restSeconds ?? 0,
-                supersetID: b.supersetID,
+                supersetID: b.supersetID, repsMin: b.repsMin, repsMax: b.repsMax,
                 sets: (b.sets ?? []).map { s in
                     SetEntry(type: s.type ?? .normal, weightKg: s.weightKg ?? s.weightLb.map { $0 / WeightConversion.poundsPerKg }, reps: s.reps,
                              durationSeconds: s.durationSeconds, distanceMeters: s.distanceMeters, rpe: s.rpe, completed: s.completed ?? setsCompleted)
@@ -122,7 +130,8 @@ extension Forge {
         }
         let workout = Workout(id: input.id ?? UUID().uuidString, title: input.title, startedAt: started, endedAt: ended, routineID: input.routineID,
                               notes: input.notes, exercises: try blocks(from: input.exercises, setsCompleted: true),
-                              hevyID: try input.id.flatMap { try self.workout(id: $0)?.hevyID })
+                              hevyID: try input.id.flatMap { try self.workout(id: $0)?.hevyID },
+                              offDay: input.offDay == true ? true : nil)
         try perform([.putWorkout(workout)], author: author)
         return workout
     }

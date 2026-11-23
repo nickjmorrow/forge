@@ -78,6 +78,8 @@ struct RoutineView: Codable {
         var notes: String?
         var restSeconds: Int
         var supersetID: Int?
+        var repsMin: Int?
+        var repsMax: Int?
         var sets: [SetEntry]
     }
     var id: String
@@ -89,7 +91,7 @@ struct RoutineView: Codable {
     init(_ r: Routine, names: [String: String]) {
         id = r.id; title = r.title; folder = r.folder; position = r.position
         exercises = r.exercises.map { Block(exerciseID: $0.exerciseID, name: names[$0.exerciseID] ?? $0.exerciseID, notes: $0.notes,
-                                            restSeconds: $0.restSeconds, supersetID: $0.supersetID, sets: $0.sets) }
+                                            restSeconds: $0.restSeconds, supersetID: $0.supersetID, repsMin: $0.repsMin, repsMax: $0.repsMax, sets: $0.sets) }
     }
 }
 
@@ -121,7 +123,7 @@ struct RoutineGroup: ParsableCommand {
     }
 
     struct Put: ParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Create a routine, or replace one by id, from JSON. Fields: title, folder, position, id, exercises: [{exercise (name) or exerciseID, notes, restSeconds, supersetID, sets: [{weightLb or weightKg, reps, type (normal|warmup|failure|drop), durationSeconds, distanceMeters, rpe}]}].")
+        static let configuration = CommandConfiguration(abstract: "Create a routine, or replace one by id, from JSON. Fields: title, folder, position, id, exercises: [{exercise (name) or exerciseID, notes, restSeconds, supersetID, repsMin and repsMax (the rep range to progress in), sets: [{weightLb or weightKg, reps, type (normal|warmup|failure|drop), durationSeconds, distanceMeters, rpe}]}].")
         @OptionGroup var global: GlobalOptions
         @Option(help: "The routine as JSON.") var json: String
         func run() throws {
@@ -191,7 +193,7 @@ struct WorkoutGroup: ParsableCommand {
     }
 
     struct Put: ParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Create a workout, or replace one by id, from JSON. Fields: title, startedAt (ISO-8601, required), endedAt, notes, routineID, id, exercises: [{exercise (name) or exerciseID, notes, restSeconds, sets: [{weightLb or weightKg, reps, type, durationSeconds, distanceMeters, rpe}]}]. Sets default to completed.")
+        static let configuration = CommandConfiguration(abstract: "Create a workout, or replace one by id, from JSON. Fields: title, startedAt (ISO-8601, required), endedAt, notes, routineID, offDay (true for a deliberately lighter session that never counts as \"last time\"), id, exercises: [{exercise (name) or exerciseID, notes, restSeconds, sets: [{weightLb or weightKg, reps, type, durationSeconds, distanceMeters, rpe}]}]. Sets default to completed.")
         @OptionGroup var global: GlobalOptions
         @Option(help: "The workout as JSON.") var json: String
         func run() throws {
@@ -215,13 +217,14 @@ struct WorkoutView: Codable {
     var endedAt: String?
     var notes: String?
     var routineID: String?
+    var offDay: Bool?
     var exercises: [RoutineView.Block]
 
     init(_ w: Workout, names: [String: String]) {
         func iso(_ ms: Int64) -> String { ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(ms) / 1000)) }
-        id = w.id; title = w.title; startedAt = iso(w.startedAt); endedAt = w.endedAt.map(iso); notes = w.notes; routineID = w.routineID
+        id = w.id; title = w.title; startedAt = iso(w.startedAt); endedAt = w.endedAt.map(iso); notes = w.notes; routineID = w.routineID; offDay = w.offDay
         exercises = w.exercises.map { RoutineView.Block(exerciseID: $0.exerciseID, name: names[$0.exerciseID] ?? $0.exerciseID, notes: $0.notes,
-                                                        restSeconds: $0.restSeconds, supersetID: $0.supersetID, sets: $0.sets) }
+                                                        restSeconds: $0.restSeconds, supersetID: $0.supersetID, repsMin: $0.repsMin, repsMax: $0.repsMax, sets: $0.sets) }
     }
 }
 

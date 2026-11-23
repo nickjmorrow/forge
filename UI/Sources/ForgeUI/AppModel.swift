@@ -22,6 +22,9 @@ public final class AppModel {
     /// Rest between sets when an exercise has no rest time of its own.
     public var defaultRestSeconds: Int { didSet { defaults.set(defaultRestSeconds, forKey: "defaultRestSeconds") } }
 
+    /// What a suggestion adds and an off day rounds to: the smallest usual jump in the display unit.
+    public var weightStepKg: Double { unit == .lb ? Units.kg(fromPounds: 5) : 2.5 }
+
     @ObservationIgnored private let draftStore: DraftStore?
     @ObservationIgnored private let restAlerts: RestAlerting?
     @ObservationIgnored private let health: HealthService?
@@ -48,7 +51,7 @@ public final class AppModel {
         self.unit = WeightUnit(rawValue: defaults.string(forKey: "weightUnit") ?? "") ?? .lb
         let savedRest = defaults.integer(forKey: "defaultRestSeconds")
         self.defaultRestSeconds = savedRest > 0 ? savedRest : 90
-        if let draftStore { session = WorkoutSession.restore(forge: forge, store: draftStore, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts) }
+        if let draftStore { session = WorkoutSession.restore(forge: forge, store: draftStore, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts, weightStepKg: weightStepKg) }
         if self.syncTransport != nil { syncStatus = "Ready" }
         reload()
     }
@@ -97,7 +100,7 @@ public final class AppModel {
     public func startWorkout(routine: Routine?) {
         guard session == nil else { return }
         // Starting writes only the draft, not the database, so there is nothing to reload: the tap stays instant.
-        do { session = try WorkoutSession.start(routine: routine, forge: forge, store: draftStore, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts) }
+        do { session = try WorkoutSession.start(routine: routine, forge: forge, store: draftStore, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts, weightStepKg: weightStepKg) }
         catch { lastError = (error as? ForgeError)?.message ?? "\(error)" }
     }
 

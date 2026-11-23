@@ -33,11 +33,21 @@ public struct ExerciseBlock: Codable, Sendable, Equatable {
     public var notes: String?
     public var restSeconds: Int
     public var supersetID: Int?
+    /// The rep range this exercise progresses in (both set, or neither): reps climb to `repsMax`, then the weight goes up
+    /// and reps restart at `repsMin`. Nil means "repeat last time".
+    public var repsMin: Int?
+    public var repsMax: Int?
     public var sets: [SetEntry]
 
-    public init(exerciseID: String, notes: String? = nil, restSeconds: Int = 0, supersetID: Int? = nil, sets: [SetEntry] = []) {
+    public init(exerciseID: String, notes: String? = nil, restSeconds: Int = 0, supersetID: Int? = nil,
+                repsMin: Int? = nil, repsMax: Int? = nil, sets: [SetEntry] = []) {
         self.exerciseID = exerciseID; self.notes = notes; self.restSeconds = restSeconds
-        self.supersetID = supersetID; self.sets = sets
+        self.supersetID = supersetID; self.repsMin = repsMin; self.repsMax = repsMax; self.sets = sets
+    }
+
+    public var repRange: ClosedRange<Int>? {
+        guard let low = repsMin, let high = repsMax, low >= 1, low <= high else { return nil }
+        return low...high
     }
 }
 
@@ -89,10 +99,17 @@ public struct Workout: Codable, Sendable, Equatable, Identifiable {
     public var notes: String?
     public var exercises: [ExerciseBlock]
     public var hevyID: String?
+    /// A deliberately lighter session. It is kept in history but never becomes "last time": it doesn't change the routine
+    /// and isn't what the next workout is compared with. Nil (workouts saved before this existed) means no.
+    public var offDay: Bool?
 
     public init(id: String = UUID().uuidString, title: String, startedAt: Int64, endedAt: Int64? = nil,
-                routineID: String? = nil, notes: String? = nil, exercises: [ExerciseBlock] = [], hevyID: String? = nil) {
+                routineID: String? = nil, notes: String? = nil, exercises: [ExerciseBlock] = [], hevyID: String? = nil,
+                offDay: Bool? = nil) {
         self.id = id; self.title = title; self.startedAt = startedAt; self.endedAt = endedAt
         self.routineID = routineID; self.notes = notes; self.exercises = exercises; self.hevyID = hevyID
+        self.offDay = offDay
     }
+
+    public var isOffDay: Bool { offDay ?? false }
 }

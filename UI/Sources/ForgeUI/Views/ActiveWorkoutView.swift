@@ -25,12 +25,14 @@ public struct ActiveWorkoutView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    ElapsedHeader(startedAt: session.workout.startedAt)
+                    ElapsedHeader(startedAt: session.workout.startedAt, offDay: session.workout.isOffDay) { session.setOffDay(!session.workout.isOffDay) }
                     ForEach(BlockRowItem.items(workout: session.workout, ids: session.blockIDs, setIDs: session.setIDs)) { row in
                         let block = row.block
                         let exercise = model.exercise(for: block.exerciseID)
                         ExerciseCard(session: session, blockID: row.id, index: row.index, count: session.blockIDs.count, block: block,
                                      setIDs: row.setIDs, previous: session.previous[block.exerciseID] ?? [],
+                                     aim: session.workout.isOffDay ? nil : Aim.text(block: block, previous: session.previous[block.exerciseID] ?? [],
+                                                                                    tracking: exercise?.tracking ?? .weightReps, stepKg: model.weightStepKg, unit: model.unit),
                                      stopwatchStartedAt: session.stopwatch?.blockID == row.id ? session.stopwatch?.startedAt : nil,
                                      name: model.name(for: block.exerciseID),
                                      caption: [exercise?.primaryMuscle.map(Muscles.title), exercise?.equipment.map(Muscles.title)].compactMap { $0 }.joined(separator: " · "),
@@ -131,19 +133,46 @@ struct SetRowItem: Identifiable {
     }
 }
 
+/// The line under an exercise's name that says what its rep range asks for today.
+enum Aim {
+    static func text(block: ExerciseBlock, previous: [SetEntry], tracking: TrackingType, stepKg: Double, unit: WeightUnit) -> String? {
+        guard let range = block.repRange, Progression.applies(to: tracking) else { return nil }
+        let reps = "\(range.lowerBound)–\(range.upperBound) reps"
+        guard let next = Progression.next(after: previous, range: range, stepKg: stepKg) else { return reps }
+        switch next.step {
+        case .addReps: return "\(reps) · one more rep than last time"
+        case .addWeight: return "\(reps) · up \(Units.format(kg: stepKg, unit: unit)) \(unit.rawValue), back to \(range.lowerBound)"
+        }
+    }
+}
+
 private struct ElapsedHeader: View {
     let startedAt: Int64
+    let offDay: Bool
+    let toggleOffDay: () -> Void
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let elapsed = Int(context.date.timeIntervalSince(Format.date(startedAt)))
             HStack(spacing: 6) {
                 Image(systemName: "clock")
                 Text(Units.clock(seconds: elapsed)).monospacedDigit().contentTransition(.numericText())
+                    .accessibilityLabel("Elapsed")
                 Spacer()
+                Button(action: toggleOffDay) {
+                    Label(offDay ? "Off day · 80%" : "Off day", systemImage: offDay ? "moon.fill" : "moon")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12).frame(minHeight: 44)
+                        .foregroundStyle(offDay ? Theme.background : Theme.dim)
+                        .background(Capsule().fill(offDay ? Theme.accent : Theme.field).frame(height: 30))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Off day")
+                .accessibilityValue(offDay ? "On, weights at 80 percent" : "Off")
+                .accessibilityHint("Lighter weights today. Your routine and next time's numbers stay as they are.")
             }
             .font(.subheadline)
             .foregroundStyle(Theme.dim)
-            .accessibilityElement(children: .combine)
         }
     }
 }
@@ -156,6 +185,8 @@ private struct ExerciseCard: View, Equatable {
     let block: ExerciseBlock
     let setIDs: [UUID]
     let previous: [SetEntry]
+    /// What the exercise's rep range asks for today; nil when it has none.
+    let aim: String?
     /// When this exercise's stopwatch started; nil while it isn't running.
     let stopwatchStartedAt: Date?
     let name: String
@@ -168,7 +199,7 @@ private struct ExerciseCard: View, Equatable {
     /// Everything the card shows; the session and the closure are how it acts, not what it displays.
     static func == (a: ExerciseCard, b: ExerciseCard) -> Bool {
         a.blockID == b.blockID && a.index == b.index && a.count == b.count && a.block == b.block && a.setIDs == b.setIDs && a.previous == b.previous
-            && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
+            && a.aim == b.aim && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
     }
 
     var body: some View {
@@ -177,6 +208,7 @@ private struct ExerciseCard: View, Equatable {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name).font(.headline)
                     if !caption.isEmpty { Text(caption).font(.caption).foregroundStyle(Theme.dim) }
+                    if let aim { Label(aim, systemImage: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent) }
                 }
                 Spacer(minLength: 4)
                 restChip

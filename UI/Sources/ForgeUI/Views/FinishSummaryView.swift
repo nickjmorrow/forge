@@ -47,6 +47,18 @@ struct FinishSummaryView: View {
                     }
                     .listRowBackground(Theme.card)
                 }
+                if workout?.isOffDay == true {
+                    Section {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Off day").font(.body)
+                                Text("Saved to your history. Your routine and next time's numbers are unchanged.")
+                                    .font(.footnote).foregroundStyle(Theme.dim)
+                            }
+                        } icon: { Image(systemName: "moon.fill").foregroundStyle(Theme.accent) }
+                    }
+                    .listRowBackground(Theme.card)
+                }
                 if let routine = summary.routineUpdate {
                     Section {
                         Label {

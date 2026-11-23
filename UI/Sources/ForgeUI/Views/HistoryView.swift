@@ -175,7 +175,8 @@ struct WorkoutRow: View {
             Text(workout.title).font(.headline)
             Text([Format.date(workout.startedAt).formatted(date: .abbreviated, time: .shortened),
                   WorkoutMath.seconds(workout).map(Format.duration(seconds:)),
-                  Format.volume(kg: WorkoutMath.volumeKg(workout), unit: model.unit)].compactMap { $0 }.joined(separator: " · "))
+                  Format.volume(kg: WorkoutMath.volumeKg(workout), unit: model.unit),
+                  workout.isOffDay ? "Off day" : nil].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption).foregroundStyle(Theme.dim)
             Text(workout.exercises.map { model.name(for: $0.exerciseID) }.joined(separator: ", "))
                 .font(.caption).foregroundStyle(Theme.dim).lineLimit(1)
@@ -196,7 +197,7 @@ struct WorkoutDetailView: View {
             Section {
                 StatLine(parts: [WorkoutMath.seconds(workout).map(Format.duration(seconds:)),
                                  Format.volume(kg: WorkoutMath.volumeKg(workout), unit: model.unit),
-                                 "\(workout.exercises.flatMap(\.sets).count) sets"].compactMap { $0 })
+                                 "\(workout.exercises.flatMap(\.sets).count) sets", workout.isOffDay ? "Off day" : nil].compactMap { $0 })
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
             }

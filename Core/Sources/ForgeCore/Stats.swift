@@ -20,6 +20,7 @@ public struct ExerciseSession: Codable, Sendable, Equatable {
     public let workoutID: String
     public let startedAt: Int64
     public let sets: [SetEntry]
+    public let offDay: Bool
 }
 
 public struct WeekMuscle: Codable, Sendable, Equatable {
@@ -33,7 +34,7 @@ extension Forge {
     public func exerciseHistory(exerciseID: String, limit: Int = 20) throws -> [ExerciseSession] {
         let rows = try db.read { db in
             try Row.fetchAll(db, sql: """
-                SELECT w.id AS workout_id, w.started_at, s.* FROM workout_sets s
+                SELECT w.id AS workout_id, w.started_at, w.off_day, s.* FROM workout_sets s
                 JOIN workout_exercises we ON we.workout_id = s.workout_id AND we.position = s.exercise_position
                 JOIN workouts w ON w.id = s.workout_id
                 WHERE we.exercise_id = ? AND s.completed = 1
@@ -41,7 +42,7 @@ extension Forge {
                 """, arguments: [exerciseID])
         }
         var sessions: [ExerciseSession] = []
-        var current: (id: String, startedAt: Int64, sets: [SetEntry])?
+        var current: (id: String, startedAt: Int64, offDay: Bool, sets: [SetEntry])?
         for r in rows {
             let id: String = r["workout_id"]
             let set = SetEntry(type: SetType(rawValue: r["type"]) ?? .normal, weightKg: r["weight_kg"], reps: r["reps"],
@@ -49,17 +50,17 @@ extension Forge {
             if current?.id == id {
                 current!.sets.append(set)
             } else {
-                if let c = current { sessions.append(ExerciseSession(workoutID: c.id, startedAt: c.startedAt, sets: c.sets)) }
-                current = (id, r["started_at"], [set])
+                if let c = current { sessions.append(ExerciseSession(workoutID: c.id, startedAt: c.startedAt, sets: c.sets, offDay: c.offDay)) }
+                current = (id, r["started_at"], r["off_day"], [set])
             }
         }
-        if let c = current { sessions.append(ExerciseSession(workoutID: c.id, startedAt: c.startedAt, sets: c.sets)) }
+        if let c = current { sessions.append(ExerciseSession(workoutID: c.id, startedAt: c.startedAt, sets: c.sets, offDay: c.offDay)) }
         return Array(sessions.prefix(limit))
     }
 
-    /// Completed sets from the most recent workout before `before` that has any, or nil.
+    /// Completed sets from the most recent workout before `before` that has any, or nil. Off days are skipped.
     public func lastPerformance(exerciseID: String, before: Int64) throws -> [SetEntry]? {
-        try exerciseHistory(exerciseID: exerciseID, limit: .max).first { $0.startedAt < before }?.sets
+        try exerciseHistory(exerciseID: exerciseID, limit: .max).first { $0.startedAt < before && !$0.offDay }?.sets
     }
 
     /// Records over completed, non-warmup sets with a weight and reps. Always recomputed from history.

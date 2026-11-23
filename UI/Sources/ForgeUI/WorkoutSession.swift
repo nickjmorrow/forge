@@ -43,9 +43,15 @@ public final class WorkoutSession {
     @ObservationIgnored private let saver: DraftSaver?
     @ObservationIgnored private let defaultRestSeconds: Int
     @ObservationIgnored private let restAlerts: RestAlerting?
+    /// The smallest weight change worth suggesting (5 lb or 2.5 kg): what a suggestion adds and what an off day rounds to.
+    @ObservationIgnored private let weightStepKg: Double
 
-    public init(forge: Forge, workout: Workout, store: DraftStore?, defaultRestSeconds: Int = 90, restAlerts: RestAlerting? = nil) {
+    public nonisolated static let defaultWeightStepKg = Units.kg(fromPounds: 5)
+
+    public init(forge: Forge, workout: Workout, store: DraftStore?, defaultRestSeconds: Int = 90, restAlerts: RestAlerting? = nil,
+                weightStepKg: Double = WorkoutSession.defaultWeightStepKg) {
         self.restAlerts = restAlerts
+        self.weightStepKg = weightStepKg
         self.forge = forge
         self.workout = workout
         self.blockIDs = workout.exercises.map { _ in UUID() }
@@ -56,17 +62,35 @@ public final class WorkoutSession {
     }
 
     public static func start(routine: Routine?, forge: Forge, store: DraftStore?, now: Date = Date(), defaultRestSeconds: Int = 90,
-                             restAlerts: RestAlerting? = nil) throws -> WorkoutSession {
-        var blocks = routine?.exercises ?? []
-        for i in blocks.indices { for j in blocks[i].sets.indices { blocks[i].sets[j].completed = false } }
+                             restAlerts: RestAlerting? = nil, weightStepKg: Double = WorkoutSession.defaultWeightStepKg) throws -> WorkoutSession {
+        let blocks = routine.map { planned($0, forge: forge, before: Self.millis(now), weightStepKg: weightStepKg) } ?? []
         let workout = Workout(title: routine?.title ?? defaultTitle(at: now), startedAt: Self.millis(now), routineID: routine?.id, exercises: blocks)
-        let session = WorkoutSession(forge: forge, workout: workout, store: store, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts)
+        let session = WorkoutSession(forge: forge, workout: workout, store: store, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts,
+                                     weightStepKg: weightStepKg)
         session.persist()
         return session
     }
 
-    public static func restore(forge: Forge, store: DraftStore, defaultRestSeconds: Int = 90, restAlerts: RestAlerting? = nil) -> WorkoutSession? {
-        store.load().map { WorkoutSession(forge: forge, workout: $0, store: store, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts) }
+    public static func restore(forge: Forge, store: DraftStore, defaultRestSeconds: Int = 90, restAlerts: RestAlerting? = nil,
+                               weightStepKg: Double = WorkoutSession.defaultWeightStepKg) -> WorkoutSession? {
+        store.load().map {
+            WorkoutSession(forge: forge, workout: $0, store: store, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts, weightStepKg: weightStepKg)
+        }
+    }
+
+    /// The routine's sets as a normal day starts them: nothing ticked, and exercises that progress in a rep range moved on
+    /// from what was done last time (one more rep, or more weight once every set reached the top of the range).
+    static func planned(_ routine: Routine, forge: Forge, before: Int64, weightStepKg: Double) -> [ExerciseBlock] {
+        var blocks = routine.exercises
+        for i in blocks.indices {
+            for j in blocks[i].sets.indices { blocks[i].sets[j].completed = false }
+            guard let range = blocks[i].repRange,
+                  Progression.applies(to: (try? forge.exercise(id: blocks[i].exerciseID))?.tracking ?? .weightReps),
+                  let last = try? forge.lastPerformance(exerciseID: blocks[i].exerciseID, before: before),
+                  let suggestion = Progression.next(after: last, range: range, stepKg: weightStepKg) else { continue }
+            blocks[i].sets = Progression.apply(suggestion, to: blocks[i].sets)
+        }
+        return blocks
     }
 
     /// "Morning Workout", "Afternoon Workout", "Evening Workout" or "Night Workout" for an empty start.
@@ -190,7 +214,7 @@ public final class WorkoutSession {
         guard current.weightKg == nil, current.reps == nil, current.durationSeconds == nil, current.distanceMeters == nil,
               let before = previous[workout.exercises[exercise].exerciseID], !before.isEmpty else { return }
         let source = set < before.count ? before[set] : before[before.count - 1]
-        workout.exercises[exercise].sets[set].weightKg = source.weightKg
+        workout.exercises[exercise].sets[set].weightKg = workout.isOffDay ? source.weightKg.map { lighter($0, exercise: exercise) } : source.weightKg
         workout.exercises[exercise].sets[set].reps = source.reps
         workout.exercises[exercise].sets[set].durationSeconds = source.durationSeconds
         workout.exercises[exercise].sets[set].distanceMeters = source.distanceMeters
@@ -211,6 +235,35 @@ public final class WorkoutSession {
     public func adjustRest(by seconds: Int, now: Date = Date()) {
         rest.adjust(by: seconds, now: now)
         restAlerts?.update(rest: rest)
+    }
+
+    // MARK: off day
+
+    /// An off day's weight for this exercise. Assistance is left alone: less of it would be harder, not lighter.
+    private func lighter(_ weightKg: Double, exercise index: Int) -> Double {
+        let tracking = (try? forge.exercise(id: workout.exercises[index].exerciseID))?.tracking ?? .weightReps
+        return tracking == .assistedBodyweight ? weightKg : Progression.lighter(weightKg, stepKg: weightStepKg)
+    }
+
+    /// Turning an off day on drops the weight of every set not yet done to 80%; turning it off puts the routine's usual
+    /// numbers back on those sets. Sets already ticked are never touched.
+    public func setOffDay(_ on: Bool) {
+        guard on != workout.isOffDay else { return }
+        workout.offDay = on ? true : nil
+        let usual = on ? [] : ((try? workout.routineID.flatMap { try forge.routine(id: $0) }) ?? nil)
+            .map { Self.planned($0, forge: forge, before: workout.startedAt, weightStepKg: weightStepKg) } ?? []
+        for i in workout.exercises.indices {
+            let plan = usual.first { $0.exerciseID == workout.exercises[i].exerciseID }?.sets ?? []
+            for j in workout.exercises[i].sets.indices where !workout.exercises[i].sets[j].completed {
+                if on {
+                    workout.exercises[i].sets[j].weightKg = workout.exercises[i].sets[j].weightKg.map { lighter($0, exercise: i) }
+                } else if j < plan.count, let usual = plan[j].weightKg {      // a set the routine has no weight for keeps what was typed
+                    workout.exercises[i].sets[j].weightKg = usual
+                }
+            }
+        }
+        revision += 1
+        persist()
     }
 
     // MARK: stopwatch
@@ -246,7 +299,7 @@ public final class WorkoutSession {
     /// Saves the workout, keeping only completed sets and exercises that have one.
     public func finish(now: Date = Date()) throws -> FinishSummary {
         var saved = workout
-        let routineUpdate = try routineWithUsedValues(now: now)
+        let routineUpdate = workout.isOffDay ? nil : try routineWithUsedValues(now: now)   // an off day never becomes the plan
         for i in saved.exercises.indices { saved.exercises[i].sets.removeAll { !$0.completed } }
         saved.exercises.removeAll { $0.sets.isEmpty }
         guard !saved.exercises.isEmpty else { throw WorkoutSessionError.nothingToSave }

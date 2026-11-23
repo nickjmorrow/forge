@@ -28,6 +28,9 @@ struct WorkoutEditorView: View {
                     Toggle("Has an end time", isOn: $hasEnd)
                     if hasEnd { DatePicker("Ended", selection: $ended, in: started...) }
                     TextField("Notes", text: Binding(get: { draft.notes ?? "" }, set: { draft.notes = $0.isEmpty ? nil : $0 }), axis: .vertical)
+                    Toggle("Off day", isOn: Binding(get: { draft.isOffDay }, set: { draft.offDay = $0 ? true : nil }))
+                } footer: {
+                    Text("An off day stays in your history but is never used as \u{201C}last time\u{201D}.").foregroundStyle(Theme.dim)
                 }.listRowBackground(Theme.card)
                 BlocksEditor(blocks: $draft.exercises, showsRest: false, showsCompletion: true)
             }

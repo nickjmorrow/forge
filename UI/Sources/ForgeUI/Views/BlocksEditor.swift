@@ -40,6 +40,11 @@ struct BlocksEditor: View {
                 Picker("Rest", selection: $blocks[i].restSeconds) {
                     ForEach(RestOptions.choices, id: \.self) { Text(RestOptions.label(for: $0, defaultSeconds: model.defaultRestSeconds)).tag($0) }
                 }
+                if Progression.applies(to: trackingType) {
+                    Picker("Progress in", selection: $blocks[i].progression) {
+                        ForEach(RepRangeOptions.choices, id: \.self) { Text(RepRangeOptions.label(for: $0)).tag($0) }
+                    }
+                }
             }
             ForEach(Array(blocks[i].sets.indices), id: \.self) { j in
                 if blocks[i].sets.indices.contains(j) { setRow(i, j, trackingType) }

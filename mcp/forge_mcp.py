@@ -39,10 +39,10 @@ def put_json(base, a, key):
     return base + ["--json", value if isinstance(value, str) else json.dumps(value)]
 
 
-ROUTINE_SHAPE = ("A routine object: {title, id?, folder?, position?, exercises: [{exercise: 'Exact Name' (or exerciseID), notes?, restSeconds?, supersetID?, "
+ROUTINE_SHAPE = ("A routine object: {title, id?, folder?, position?, exercises: [{exercise: 'Exact Name' (or exerciseID), notes?, restSeconds?, supersetID?, repsMin? and repsMax? (the rep range the exercise progresses in, e.g. 8 and 12; omit both for 'repeat last time'), "
                  "sets: [{weightLb or weightKg, reps, type?: normal|warmup|failure|drop, durationSeconds?, distanceMeters?, rpe?}]}]}. "
                  "With an existing id it replaces that routine.")
-WORKOUT_SHAPE = ("A workout object: {title, startedAt (ISO-8601, required), endedAt?, notes?, routineID?, id?, exercises: same shape as routines}. "
+WORKOUT_SHAPE = ("A workout object: {title, startedAt (ISO-8601, required), endedAt?, notes?, routineID?, offDay?: true for a deliberately lighter session (kept in history, never used as 'last time'), id?, exercises: same shape as routines}. "
                  "Sets default to completed. With an existing id it replaces that workout.")
 EXERCISE_SHAPE = ("An exercise object: {name, equipment?, primaryMuscle?, secondaryMuscles?: [..], tracking?: weightReps|repsOnly|weightedBodyweight|assistedBodyweight|duration|weightDuration|distance|distanceDuration, id?}. "
                   "With an existing id only the given fields change.")

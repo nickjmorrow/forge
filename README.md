@@ -7,6 +7,7 @@ A strength-training tracker for iPhone and Mac, with a JSON command line and an 
 ## What it does
 
 - **Log workouts on iPhone**: start from a routine, see what you lifted last time, tick off sets, and get a rest timer with a lock-screen Live Activity and a bell that rings even with the phone locked. An in-progress workout is saved to disk as you type, so it survives the app being killed.
+- **Progress and off days**: give an exercise a rep range (say 8–12) and each workout starts one rep up from last time, then at the next weight once every set reaches the top. Mark a workout as an off day to lift at 80%: it is kept in history but never changes the routine or what "last time" means.
 - **Review and plan on Mac**: a dashboard (this week at a glance, training calendar, recent records, sleep against training), per-exercise progress charts, and routines laid out whole and edited in place with drag-to-reorder.
 - **Progress stats**: estimated one-rep max (Epley), personal records recomputed from history, weekly working sets per muscle, and a forgiving exercise search that tolerates typos and abbreviations ("bnch", "extention").
 - **Every change is an undoable op**: all writes go through a log of typed operations with stored inverses. Undo is per author and refuses, rather than forces, when someone else has since edited the same thing.

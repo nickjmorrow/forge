@@ -600,3 +600,117 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         #expect(try f.routine(id: "r2")?.exercises[0].sets.map(\.durationSeconds) == [45, 30])
     }
 }
+
+@MainActor @Suite struct ProgressionSessionTests {
+    private func rangedRoutine() -> Routine {
+        Routine(id: "r1", title: "Chest", exercises: [
+            ExerciseBlock(exerciseID: "bench", repsMin: 8, repsMax: 12, sets: [
+                SetEntry(type: .warmup, weightKg: 40, reps: 10), SetEntry(weightKg: 80, reps: 9), SetEntry(weightKg: 80, reps: 9)]),
+            ExerciseBlock(exerciseID: "fly", sets: [SetEntry(weightKg: 20, reps: 12)]),
+        ], createdAt: 1, updatedAt: 1)
+    }
+
+    private func log(_ f: Forge, at ms: Int64, bench: [SetEntry], offDay: Bool = false) throws {
+        try f.perform([.putWorkout(Workout(title: "Chest", startedAt: ms, routineID: "r1",
+                                           exercises: [ExerciseBlock(exerciseID: "bench", sets: bench), ExerciseBlock(exerciseID: "fly", sets: [done(20, 12)])],
+                                           offDay: offDay ? true : nil))], author: .me)
+    }
+
+    @Test func aRangedExerciseStartsOneRepUpAndOthersRepeat() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(rangedRoutine())], author: .me)
+        try log(f, at: 1000, bench: [done(80, 10), done(80, 9)])
+        let s = try WorkoutSession.start(routine: rangedRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        #expect(s.workout.exercises[0].sets.map(\.reps) == [10, 11, 10])           // the warm-up keeps its plan
+        #expect(s.workout.exercises[0].sets.map(\.weightKg) == [40, 80, 80])
+        #expect(s.workout.exercises[1].sets.map(\.reps) == [12])                   // no range: repeats
+    }
+
+    @Test func theWeightGoesUpOnceEverySetReachedTheTop() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(rangedRoutine())], author: .me)
+        try log(f, at: 1000, bench: [done(80, 12), done(80, 12)])
+        let s = try WorkoutSession.start(routine: rangedRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        #expect(s.workout.exercises[0].sets.dropFirst().map(\.weightKg) == [82.5, 82.5])
+        #expect(s.workout.exercises[0].sets.dropFirst().map(\.reps) == [8, 8])
+    }
+
+    @Test func anOffDayNeverFeedsTheSuggestion() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(rangedRoutine())], author: .me)
+        try log(f, at: 1000, bench: [done(80, 10), done(80, 9)])
+        try log(f, at: 2000, bench: [done(65, 12), done(65, 12)], offDay: true)
+        let s = try WorkoutSession.start(routine: rangedRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        #expect(s.workout.exercises[0].sets.dropFirst().map(\.weightKg) == [80, 80])
+        #expect(s.previous["bench"]?.map(\.weightKg) == [80, 80])
+    }
+
+    @Test func aRangedExerciseWithNoHistoryKeepsItsPlan() throws {
+        let f = try lib()
+        let s = try WorkoutSession.start(routine: rangedRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        #expect(s.workout.exercises[0].sets.map(\.reps) == [10, 9, 9])
+    }
+}
+
+@MainActor @Suite struct OffDaySessionTests {
+    @Test func turningItOnLightensSetsNotYetDoneAndTurningItOffRestoresThePlan() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(chestRoutine())], author: .me)
+        let s = try WorkoutSession.start(routine: chestRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        s.setOffDay(true)
+        #expect(s.workout.isOffDay)
+        #expect(s.workout.exercises[0].sets.map(\.weightKg) == [40, 65, 65])       // the ticked warm-up is left; 64 rounds to 65
+        #expect(s.workout.exercises[1].sets.map(\.weightKg) == [15])               // 16 rounds to 15
+        #expect(s.workout.exercises[0].sets.map(\.reps) == [10, 6, 6])
+        s.setOffDay(false)
+        #expect(!s.workout.isOffDay)
+        #expect(s.workout.exercises[0].sets.map(\.weightKg) == [40, 80, 80])
+        #expect(s.workout.exercises[1].sets.map(\.weightKg) == [20])
+    }
+
+    @Test func turningItOffKeepsATypedWeightTheRoutineHasNoPlanFor() throws {
+        let f = try lib()
+        let routine = Routine(id: "r3", title: "Blank", exercises: [ExerciseBlock(exerciseID: "bench", sets: [SetEntry()])])
+        try f.perform([.putRoutine(routine)], author: .me)
+        let s = try WorkoutSession.start(routine: routine, forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        s.update(exercise: 0, set: 0) { $0.weightKg = 100 }
+        s.setOffDay(true)
+        #expect(s.workout.exercises[0].sets[0].weightKg == 80)
+        s.setOffDay(false)
+        #expect(s.workout.exercises[0].sets[0].weightKg == 80)
+    }
+
+    @Test func finishingAnOffDaySavesItButLeavesTheRoutineAlone() throws {
+        let f = try lib()
+        try f.perform([.putRoutine(chestRoutine())], author: .me)
+        let s = try WorkoutSession.start(routine: chestRoutine(), forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        s.setOffDay(true)
+        s.toggleComplete(exercise: 0, set: 1, now: t0)
+        let summary = try s.finish(now: t0.addingTimeInterval(600))
+        #expect(summary.routineUpdate == nil)
+        #expect(try f.routine(id: "r1") == chestRoutine())
+        #expect(try f.workout(id: summary.workoutID)?.isOffDay == true)
+        #expect(try f.lastPerformance(exerciseID: "bench", before: .max) == nil)
+    }
+
+    @Test func anEmptySetTickedOnAnOffDayFillsAtEightyPercentOfLastTime() throws {
+        let f = try lib()
+        try f.perform([.putWorkout(Workout(title: "A", startedAt: 1000, exercises: [ExerciseBlock(exerciseID: "bench", sets: [done(100, 5)])]))], author: .me)
+        let s = try WorkoutSession.start(routine: nil, forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        s.addExercise("bench")
+        s.setOffDay(true)
+        s.toggleComplete(exercise: 0, set: 0, now: t0)
+        #expect(s.workout.exercises[0].sets[0].weightKg == 80)
+        #expect(s.workout.exercises[0].sets[0].reps == 5)
+    }
+
+    @Test func assistanceIsNotReducedOnAnOffDay() throws {
+        let f = try lib()
+        try f.perform([.putExercise(Exercise(id: "dip", name: "Assisted Dip", tracking: .assistedBodyweight))], author: .me)
+        let routine = Routine(id: "r2", title: "Dips", exercises: [ExerciseBlock(exerciseID: "dip", sets: [SetEntry(weightKg: 30, reps: 8)])])
+        let s = try WorkoutSession.start(routine: routine, forge: f, store: nil, now: t0, weightStepKg: 2.5)
+        s.setOffDay(true)
+        #expect(s.workout.exercises[0].sets[0].weightKg == 30)
+    }
+}

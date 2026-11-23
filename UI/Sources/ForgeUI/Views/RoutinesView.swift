@@ -271,6 +271,10 @@ private struct ExerciseSummaryRow: View {
             HStack(spacing: 10) {
                 Text(model.name(for: block.exerciseID)).font(.headline).lineLimit(1)
                 Spacer(minLength: 8)
+                if let range = block.repRange, Progression.applies(to: tracking) {
+                    Label(RepRangeOptions.label(for: range), systemImage: "arrow.up.right")
+                        .font(.callout.monospacedDigit()).foregroundStyle(Theme.accent)
+                }
                 Label("Rest " + RestOptions.shortLabel(for: block.restSeconds, defaultSeconds: model.defaultRestSeconds), systemImage: "timer")
                     .font(.callout.monospacedDigit()).foregroundStyle(Theme.dim)
             }
@@ -304,6 +308,22 @@ private struct ExerciseRow: View {
                 HStack(spacing: 10) {
                     Text(model.name(for: block.exerciseID)).font(.headline).lineLimit(1)
                     Spacer(minLength: 8)
+                    if Progression.applies(to: tracking) {
+                        Menu {
+                            Picker("Progress in", selection: $block.progression) {
+                                ForEach(RepRangeOptions.choices, id: \.self) { Text(RepRangeOptions.label(for: $0)).tag($0) }
+                            }
+                            .pickerStyle(.inline)
+                        } label: {
+                            Label(block.repRange.map { RepRangeOptions.label(for: $0) } ?? "No rep range", systemImage: "arrow.up.right")
+                                .font(.callout.monospacedDigit())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .tint(block.repRange == nil ? Theme.dim : Theme.accent)
+                        .help("Rep range to progress in: reps climb to the top, then the weight goes up")
+                    }
                     Menu {
                         Picker("Rest", selection: $block.restSeconds) {
                             ForEach(RestOptions.choices, id: \.self) { Text(RestOptions.label(for: $0, defaultSeconds: model.defaultRestSeconds)).tag($0) }

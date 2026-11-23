@@ -138,6 +138,16 @@ enum Schema {
                 }
             }
         }
+        m.registerMigration("v5") { db in
+            // Off days (kept in history, never "last time") and the rep range an exercise progresses in.
+            try db.execute(sql: """
+            ALTER TABLE workouts ADD COLUMN off_day INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE routine_exercises ADD COLUMN reps_min INTEGER;
+            ALTER TABLE routine_exercises ADD COLUMN reps_max INTEGER;
+            ALTER TABLE workout_exercises ADD COLUMN reps_min INTEGER;
+            ALTER TABLE workout_exercises ADD COLUMN reps_max INTEGER;
+            """)
+        }
         return m
     }
 }
