@@ -23,7 +23,7 @@ extension View {
 }
 
 /// A number field that keeps what is being typed (so "62." survives) and reports each edit.
-/// 44 pt tall, ink fill, an ember outline while it has focus, placeholders at 7:1.
+/// 44 pt tall, oxblood fill, a vermilion outline while it has focus, placeholders at 7:1.
 struct ValueField: View {
     let placeholder: String
     /// What the model currently holds for this field; the field follows it unless it is being typed in.

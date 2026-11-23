@@ -1,29 +1,30 @@
 import SwiftUI
 
-/// Ember: night-mode indigo ink with a fire accent, taken from the app icon (an ember flame on an ink tile).
-/// Ember is the one tint and belongs to things you can act on; gold is kept for records, completion is mint, destructive is rose, everything else is ink and text.
+/// Plate: the app icon's engraved plate. Oxblood ground, a vermilion ring, brass line work and a cream flame.
+/// Vermilion is the one tint and belongs to things you can act on; brass is kept for records, completion is the green of
+/// copper patina, destructive is rose, everything else is oxblood and cream.
 public enum Theme {
     // Surfaces, darkest to lightest
-    public static let background = Color(hex: 0x0a0b19)   // ink 950: screens
-    public static let bar = Color(hex: 0x0e1021)          // ink 900: bars and sheets
-    public static let card = Color(hex: 0x13162b)         // ink 850: grouped content
-    public static let field = Color(hex: 0x1a1d38)        // ink 800: inputs and quiet buttons
-    public static let raised = Color(hex: 0x252950)       // ink 700: pressed and selected fills
-    public static let line = Color(hex: 0x33386a)         // ink 600: separators and outlines
+    public static let background = Color(hex: 0x140a0c)   // oxblood 950: screens
+    public static let bar = Color(hex: 0x1a0d10)          // oxblood 900: bars and sheets
+    public static let card = Color(hex: 0x221216)         // oxblood 850: grouped content
+    public static let field = Color(hex: 0x2e191e)        // oxblood 800: inputs and quiet buttons
+    public static let raised = Color(hex: 0x42242b)       // oxblood 700: pressed and selected fills
+    public static let line = Color(hex: 0x57323a)         // oxblood 600: separators and outlines
 
     // Text. `faint` is 3.9:1 on a card, so it is for decoration and disabled states only, never for reading.
-    public static let text = Color(hex: 0xe8eaf8)
-    public static let dim = Color(hex: 0xa6abcf)          // 7.9:1 on a card: secondary text and placeholders
-    public static let faint = Color(hex: 0x6f7499)
+    public static let text = Color(hex: 0xf1e7d3)         // the flame's cream
+    public static let dim = Color(hex: 0xc4ab9c)          // 8.1:1 on a card: secondary text and placeholders
+    public static let faint = Color(hex: 0x8c706a)
 
-    public static let accent = Color(hex: 0xff8a3d)       // ember, 7.6:1 on a card
-    public static let accentBright = Color(hex: 0xffa55c)
-    public static let flameTop = Color(hex: 0xffb347)     // the icon's flame, top to bottom: primary buttons only
-    public static let flameBottom = Color(hex: 0xff6a2b)
-    public static let gold = Color(hex: 0xffd25a)         // personal records only
-    public static let done = Color(hex: 0x5fe3b4)
-    public static let danger = Color(hex: 0xff5c8a)       // rose, kept clear of the ember accent
-    public static let info = Color(hex: 0x67c6ff)
+    public static let accent = Color(hex: 0xe8794a)       // vermilion, 6.3:1 on a card
+    public static let accentBright = Color(hex: 0xf39566)
+    public static let flameTop = Color(hex: 0xf08c55)     // the ring, lit from above: primary buttons only
+    public static let flameBottom = Color(hex: 0xd06035)
+    public static let gold = Color(hex: 0xdcb565)         // brass: personal records only
+    public static let done = Color(hex: 0x86d3aa)         // patina
+    public static let danger = Color(hex: 0xff6b8f)       // rose, kept clear of the vermilion accent
+    public static let info = Color(hex: 0x86b9d8)         // quenched steel
 }
 
 extension Color {
@@ -66,7 +67,7 @@ extension View {
     func appears(from edge: Edge = .bottom) -> some View { modifier(AppearTransition(edge: edge)) }
 }
 
-/// The primary action: the icon's flame gradient, ink label (6.8:1 at the darkest), a 44-pt target.
+/// The primary action: a lit-vermilion gradient, oxblood label (5.0:1 at the darkest), a 44-pt target.
 struct AccentButtonStyle: ButtonStyle {
     var compact = false
     func makeBody(configuration: Configuration) -> some View {
@@ -82,7 +83,7 @@ struct AccentButtonStyle: ButtonStyle {
     }
 }
 
-/// A secondary action: an ink fill with an ember label.
+/// A secondary action: an oxblood fill with a vermilion label.
 struct QuietButtonStyle: ButtonStyle {
     var fills = true
     func makeBody(configuration: Configuration) -> some View {
@@ -99,14 +100,14 @@ struct QuietButtonStyle: ButtonStyle {
 }
 
 extension View {
-    /// The app's window-level look: dark, ember tint, ink ground.
+    /// The app's window-level look: dark, vermilion tint, oxblood ground.
     func forgeTheme() -> some View {
         self.preferredColorScheme(.dark)
             .tint(Theme.accent)                       // buttons and links take the tint; a root foregroundStyle would flatten them to text color
             .background(Theme.background.ignoresSafeArea())
     }
 
-    /// For a `List` or `Form`: ink ground instead of the system gray.
+    /// For a `List` or `Form`: oxblood ground instead of the system gray.
     func themedList() -> some View {
         self.scrollContentBackground(.hidden).background(Theme.background.ignoresSafeArea())
     }

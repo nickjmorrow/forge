@@ -155,6 +155,9 @@ private struct RoutineDetail: View {
                         .listRowInsets(EdgeInsets(top: reordering ? 6 : 12, leading: 28, bottom: reordering ? 6 : 12, trailing: 28))
                         .listRowBackground(Color.clear)
                         .listRowSeparatorTint(Theme.line.opacity(0.6))
+                        // Full-width rules: left alone, the rule starts at the row's last text (the rest label) and reads as a stub.
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                        .alignmentGuide(.listRowSeparatorTrailing) { d in d.width }
                 }
             }
             .onMove(perform: reordering ? { source, destination in draft.exercises.move(fromOffsets: source, toOffset: destination) } : nil)

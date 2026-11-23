@@ -40,18 +40,15 @@ public struct HistoryView: View {
         selectedDay.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? shownMonth.formatted(.dateTime.month(.wide).year())
     }
 
-    public var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    CalendarCard(month: shownMonth, counts: HistoryCalendar.counts(workouts: model.workouts, calendar: calendar), calendar: calendar,
-                                 selectedDay: $selectedDay, onShift: { delta in
-                        month = HistoryCalendar.month(shownMonth, shiftedBy: delta, calendar: calendar)
-                        selectedDay = nil
-                    })
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+    private var calendarCard: some View {
+        CalendarCard(month: shownMonth, counts: HistoryCalendar.counts(workouts: model.workouts, calendar: calendar), calendar: calendar,
+                     selectedDay: $selectedDay, onShift: { delta in
+            month = HistoryCalendar.month(shownMonth, shiftedBy: delta, calendar: calendar)
+            selectedDay = nil
+        })
+    }
+
+    @ViewBuilder private var workoutRows: some View {
                 Section {
                     ForEach(rows) { w in
                         NavigationLink(value: w.id) { WorkoutRow(workout: w) }
@@ -76,8 +73,30 @@ public struct HistoryView: View {
                     }
                 }
                 .listRowBackground(Theme.card)
-            }
-            .themedList()
+    }
+
+    /// On the phone the calendar scrolls with the list; a Mac window has the width to keep it beside the list instead.
+    @ViewBuilder private var layout: some View {
+        #if os(macOS)
+        HStack(alignment: .top, spacing: 0) {
+            calendarCard.frame(width: 380).padding(.leading, 20).padding(.top, 12)
+            List { workoutRows }.themedList()
+        }
+        .background(Theme.background)
+        #else
+        List {
+            Section { calendarCard }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+            workoutRows
+        }
+        .themedList()
+        #endif
+    }
+
+    public var body: some View {
+        NavigationStack {
+            layout
             .navigationTitle("History")
             .navigationDestination(for: String.self) { id in
                 if let w = model.workouts.first(where: { $0.id == id }) { WorkoutDetailView(workout: w) }

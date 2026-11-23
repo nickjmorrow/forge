@@ -32,7 +32,7 @@ public struct MacRootView: View {
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 190)
             .scrollContentBackground(.hidden)
-            .background(Theme.bar.ignoresSafeArea())   // ink instead of the system's neutral sidebar gray
+            .background(Theme.bar.ignoresSafeArea())   // oxblood instead of the system's neutral sidebar gray
         } detail: {
             switch section {
             case .dashboard: DashboardView()
