@@ -1,23 +1,25 @@
 #if os(macOS)
 import SwiftUI
 
-/// The Mac app: a sidebar for reviewing data and managing routines and the library. Workouts are logged on the phone.
+/// The Mac app: a sidebar for reviewing data and managing routines, guides and the library. Workouts are logged on the phone.
 public struct MacRootView: View {
     @AppStorage("macSection") private var section: Section = .dashboard
 
-    /// True while the open routine has unsaved edits; switching sections then asks first.
+    /// True while the open routine or guide has unsaved edits; switching sections then asks first.
     @State private var routineHasUnsavedEdits = false
+    @State private var guideHasUnsavedEdits = false
     @State private var pendingSection: Section?
 
     public init() {}
 
     enum Section: String, CaseIterable, Identifiable {
-        case dashboard = "Dashboard", routines = "Routines", history = "History", exercises = "Exercises", settings = "Settings"
+        case dashboard = "Dashboard", routines = "Routines", guides = "Mobility & Flexibility", history = "History", exercises = "Exercises", settings = "Settings"
         var id: String { rawValue }
         var icon: String {
             switch self {
             case .dashboard: return "chart.bar.xaxis"
             case .routines: return "list.bullet.rectangle"
+            case .guides: return "figure.flexibility"
             case .history: return "clock"
             case .exercises: return "dumbbell"
             case .settings: return "gearshape"
@@ -37,6 +39,7 @@ public struct MacRootView: View {
             switch section {
             case .dashboard: DashboardView()
             case .routines: RoutinesView(hasUnsavedEdits: $routineHasUnsavedEdits)
+            case .guides: GuidesView(hasUnsavedEdits: $guideHasUnsavedEdits)
             case .history: HistoryView()
             case .exercises: ExerciseListView()
             case .settings: SettingsView()
@@ -48,11 +51,11 @@ public struct MacRootView: View {
                             titleVisibility: .visible) {
             Button("Discard Changes", role: .destructive) { if let s = pendingSection { section = s } }
             Button("Keep Editing", role: .cancel) {}
-        } message: { Text("This routine has edits that haven't been saved.") }
+        } message: { Text(guideHasUnsavedEdits ? "This guide has edits that haven't been saved." : "This routine has edits that haven't been saved.") }
     }
 
     private func open(_ s: Section) {
-        if routineHasUnsavedEdits && s != section { pendingSection = s } else { section = s }
+        if (routineHasUnsavedEdits || guideHasUnsavedEdits) && s != section { pendingSection = s } else { section = s }
     }
 }
 #endif

@@ -8,7 +8,7 @@ A strength-training tracker for iPhone and Mac, with a JSON command line and an 
 
 - **Log workouts on iPhone**: start from a routine, see what you lifted last time, tick off sets, and get a rest timer with a lock-screen Live Activity and a bell that rings even with the phone locked. An in-progress workout is saved to disk as you type, so it survives the app being killed.
 - **Progress and off days**: give an exercise a rep range (say 8–12) and each workout starts one rep up from last time, then at the next weight once every set reaches the top. Mark a workout as an off day to lift at 80%: it is kept in history but never changes the routine or what "last time" means. A routine slot can list alternatives ("this or that"): during a workout, tap one to do it instead.
-- **Review and plan on Mac**: a dashboard (this week at a glance, training calendar, recent records, sleep against training), per-exercise progress charts, and routines laid out whole and edited in place with drag-to-reorder.
+- **Review and plan on Mac**: a dashboard (this week at a glance, training calendar, recent records, sleep against training), per-exercise progress charts, and routines and guides laid out whole and edited in place with drag-to-reorder.
 - **Guides for mobility and stretching**: step lists kept beside your routines, grouped into sections, each step with an optional cue. They are for reading, not logging: open one from the Workout tab, or from a button during a workout, and edit it on either device.
 - **Progress stats**: estimated one-rep max (Epley), personal records recomputed from history, weekly working sets per muscle, and a forgiving exercise search that tolerates typos and abbreviations ("bnch", "extention").
 - **Every change is an undoable op**: all writes go through a log of typed operations with stored inverses. Undo is per author and refuses, rather than forces, when someone else has since edited the same thing.
@@ -105,13 +105,13 @@ forge sync-setup --url https://… --token …  &&  forge sync
 ## Tests
 
 ```bash
-swift test --package-path Core                  # 112 tests
-swift test --package-path UI                    # 125 tests
-swift test --package-path CLI                   # 20 tests
-swift build --package-path CLI -c release && python3 -m unittest discover -s mcp   # 12 tests, uses the release CLI
+swift test --package-path Core                  # 142 tests
+swift test --package-path UI                    # 161 tests
+swift test --package-path CLI                   # 23 tests
+swift build --package-path CLI -c release && python3 -m unittest discover -s mcp   # 14 tests, uses the release CLI
 ```
 
-About 270 tests in all. Core covers the op log and undo, routine edits and exercise merges, stats, Hevy import, recovery, export, the read-only SQL guard, loading a thousand workouts quickly, and sync convergence (concurrent edits, deletes against edits, two connections to one file). UI covers the workout session, rest timer and units, search ranking, dashboard numbers, the history calendar, a rendered dashboard snapshot, and performance budgets for reloading the app model and typing into a live workout. CLI and MCP tests run the real commands and a real hub end to end against temporary databases.
+About 340 tests in all. Core covers the op log and undo, routine edits and exercise merges, guides, stats, Hevy import, recovery, export, the read-only SQL guard, loading a thousand workouts quickly, and sync convergence (concurrent edits, deletes against edits, two connections to one file). UI covers the workout session, rest timer and units, search ranking, dashboard numbers, the history calendar, reordering inside a guide, rendered dashboard and guide snapshots, and performance budgets for reloading the app model and typing into a live workout. CLI and MCP tests run the real commands and a real hub end to end against temporary databases.
 
 ## Project layout
 
