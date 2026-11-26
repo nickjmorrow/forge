@@ -117,3 +117,39 @@ public struct Workout: Codable, Sendable, Equatable, Identifiable {
 
     public var isOffDay: Bool { offDay ?? false }
 }
+
+/// One movement in a guide: what it is, and optionally how to do it.
+public struct GuideStep: Codable, Sendable, Equatable {
+    public var name: String
+    public var cue: String?
+
+    public init(name: String, cue: String? = nil) { self.name = name; self.cue = cue }
+}
+
+public struct GuideSection: Codable, Sendable, Equatable {
+    /// May be empty: a guide with one untitled section is a flat list.
+    public var title: String
+    public var steps: [GuideStep]
+
+    public init(title: String = "", steps: [GuideStep] = []) { self.title = title; self.steps = steps }
+}
+
+/// A list of steps to read through (a mobility or stretching sequence). Unlike a routine it is never started or logged.
+public struct Guide: Codable, Sendable, Equatable, Identifiable {
+    public var id: String
+    public var title: String
+    /// A line for the whole guide, such as how many reps of each step.
+    public var notes: String?
+    public var position: Int
+    public var sections: [GuideSection]
+    public var createdAt: Int64
+    public var updatedAt: Int64
+
+    public init(id: String = UUID().uuidString, title: String, notes: String? = nil, position: Int = 0, sections: [GuideSection] = [],
+                createdAt: Int64 = Forge.nowMillis(), updatedAt: Int64 = Forge.nowMillis()) {
+        self.id = id; self.title = title; self.notes = notes; self.position = position; self.sections = sections
+        self.createdAt = createdAt; self.updatedAt = updatedAt
+    }
+
+    public var stepCount: Int { sections.reduce(0) { $0 + $1.steps.count } }
+}

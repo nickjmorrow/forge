@@ -16,6 +16,22 @@ public struct ForgeExport: Codable, Sendable {
     public var workouts: [Workout]
     public var bodyweight: [BodyweightEntry]
     public var recovery: [Recovery]
+    public var guides: [Guide] = []
+}
+
+extension ForgeExport {
+    /// Exports written before guides existed have no `guides` key.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        exportedAt = try c.decode(String.self, forKey: .exportedAt)
+        exercises = try c.decode([Exercise].self, forKey: .exercises)
+        routines = try c.decode([Routine].self, forKey: .routines)
+        workouts = try c.decode([Workout].self, forKey: .workouts)
+        bodyweight = try c.decode([BodyweightEntry].self, forKey: .bodyweight)
+        recovery = try c.decode([Recovery].self, forKey: .recovery)
+        guides = try c.decodeIfPresent([Guide].self, forKey: .guides) ?? []
+    }
 }
 
 extension Forge {
@@ -30,11 +46,11 @@ extension Forge {
         try perform([.deleteBodyweight(date: date)], author: author)
     }
 
-    /// Pretty-printed JSON of every exercise, routine, workout, bodyweight entry and recovery row.
+    /// Pretty-printed JSON of every exercise, routine, guide, workout, bodyweight entry and recovery row.
     public func exportAll() throws -> Data {
         let export = ForgeExport(exportedAt: ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(clock()) / 1000)),
                                  exercises: try exercises(), routines: try routines(), workouts: try workouts(limit: Int.max),
-                                 bodyweight: try bodyweights(), recovery: try recoveries())
+                                 bodyweight: try bodyweights(), recovery: try recoveries(), guides: try guides())
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(export)

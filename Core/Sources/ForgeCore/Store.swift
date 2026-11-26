@@ -51,6 +51,23 @@ enum Store {
         try writeBlocks(r.exercises, table: "routine_exercises", setTable: "routine_sets", keyColumn: "routine_id", key: r.id, db)
     }
 
+    static func guide(_ id: String, _ db: Database) throws -> Guide? {
+        try Row.fetchOne(db, sql: "SELECT * FROM guides WHERE id = ?", arguments: [id]).map(decodeGuide)
+    }
+
+    static func decodeGuide(_ r: Row) throws -> Guide {
+        Guide(id: r["id"], title: r["title"], notes: r["notes"], position: r["position"],
+              sections: try JSONDecoder().decode([GuideSection].self, from: Data((r["sections"] as String).utf8)),
+              createdAt: r["created_at"], updatedAt: r["updated_at"])
+    }
+
+    static func writeGuide(_ g: Guide, _ db: Database) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        try db.execute(sql: "INSERT OR REPLACE INTO guides (id, title, notes, position, sections, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       arguments: [g.id, g.title, g.notes, g.position, String(decoding: try encoder.encode(g.sections), as: UTF8.self), g.createdAt, g.updatedAt])
+    }
+
     static func workout(_ id: String, _ db: Database) throws -> Workout? {
         try Row.fetchOne(db, sql: "SELECT * FROM workouts WHERE id = ?", arguments: [id]).map { try decodeWorkout($0, db) }
     }
@@ -155,6 +172,7 @@ extension Forge {
     public func exercise(id: String) throws -> Exercise? { try db.read { try Store.exercise(id, $0) } }
     public func routine(id: String) throws -> Routine? { try db.read { try Store.routine(id, $0) } }
     public func workout(id: String) throws -> Workout? { try db.read { try Store.workout(id, $0) } }
+    public func guide(id: String) throws -> Guide? { try db.read { try Store.guide(id, $0) } }
     public func bodyweight(date: String) throws -> Double? {
         try db.read { try Double.fetchOne($0, sql: "SELECT kg FROM bodyweight WHERE date = ?", arguments: [date]) }
     }

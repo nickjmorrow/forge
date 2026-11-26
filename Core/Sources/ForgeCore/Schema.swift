@@ -155,6 +155,20 @@ enum Schema {
             ALTER TABLE workout_exercises ADD COLUMN alternatives TEXT;
             """)
         }
+        m.registerMigration("v7") { db in
+            // Guides: step lists to read through. A guide is always read and written whole, so its sections are one JSON column.
+            try db.execute(sql: """
+            CREATE TABLE guides (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              notes TEXT,
+              position INTEGER NOT NULL,
+              sections TEXT NOT NULL DEFAULT '[]',
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL
+            );
+            """)
+        }
         return m
     }
 }

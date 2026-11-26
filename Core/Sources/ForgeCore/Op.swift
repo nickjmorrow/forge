@@ -14,6 +14,8 @@ public indirect enum Op: Codable, Sendable, Equatable {
     case deleteBodyweight(date: String)
     case putRecovery(Recovery)
     case deleteRecovery(date: String, source: String)
+    case putGuide(Guide)
+    case deleteGuide(id: String)
     case batch([Op])
 
     var kind: String { Mirror(reflecting: self).children.first?.label ?? "\(self)" }
@@ -32,6 +34,8 @@ public indirect enum Op: Codable, Sendable, Equatable {
         case let .deleteBodyweight(date): return "Removed bodyweight for \(date)"
         case let .putRecovery(r): return "Sleep and recovery for \(r.date) (\(r.source))"
         case let .deleteRecovery(date, source): return "Removed recovery for \(date) (\(source))"
+        case let .putGuide(g): return "Saved guide “\(g.title)”"
+        case .deleteGuide: return "Deleted a guide"
         case let .batch(ops):
             let kinds = Set(ops.map(\.kind))
             if ops.count > 1, kinds.count == 1, let noun = ops[0].plural {
@@ -43,8 +47,8 @@ public indirect enum Op: Codable, Sendable, Equatable {
 
     private var verb: String {
         switch self {
-        case .putExercise, .putRoutine, .putWorkout, .putBodyweight, .putRecovery: return "Saved"
-        case .deleteExercise, .deleteRoutine, .deleteWorkout, .deleteBodyweight, .deleteRecovery: return "Deleted"
+        case .putExercise, .putRoutine, .putWorkout, .putBodyweight, .putRecovery, .putGuide: return "Saved"
+        case .deleteExercise, .deleteRoutine, .deleteWorkout, .deleteBodyweight, .deleteRecovery, .deleteGuide: return "Deleted"
         default: return "Changed"
         }
     }
@@ -56,6 +60,7 @@ public indirect enum Op: Codable, Sendable, Equatable {
         case .putWorkout, .deleteWorkout: return "workouts"
         case .putBodyweight, .deleteBodyweight: return "bodyweight entries"
         case .putRecovery, .deleteRecovery: return "recovery rows"
+        case .putGuide, .deleteGuide: return "guides"
         default: return nil
         }
     }
@@ -74,6 +79,8 @@ public indirect enum Op: Codable, Sendable, Equatable {
         case let .deleteBodyweight(date): return ["bodyweight:\(date)"]
         case let .putRecovery(r): return ["recovery:\(r.date)|\(r.source)"]
         case let .deleteRecovery(date, source): return ["recovery:\(date)|\(source)"]
+        case let .putGuide(g): return ["guide:\(g.id)"]
+        case let .deleteGuide(id): return ["guide:\(id)"]
         case let .batch(ops): return ops.reduce(into: Set<String>()) { $0.formUnion($1.entityKeys) }
         }
     }

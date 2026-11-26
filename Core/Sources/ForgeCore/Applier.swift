@@ -49,6 +49,14 @@ enum Applier {
             guard let previous = try Store.recovery(date: date, source: source, db) else { throw ForgeError.notFound("recovery \(date) \(source)") }
             try db.execute(sql: "DELETE FROM recovery WHERE date = ? AND source = ?", arguments: [date, source])
             return .putRecovery(previous)
+        case let .putGuide(g):
+            let previous = try Store.guide(g.id, db)
+            try Store.writeGuide(g, db)
+            return previous.map(Op.putGuide) ?? .deleteGuide(id: g.id)
+        case let .deleteGuide(id):
+            guard let previous = try Store.guide(id, db) else { throw ForgeError.notFound("guide \(id)") }
+            try db.execute(sql: "DELETE FROM guides WHERE id = ?", arguments: [id])
+            return .putGuide(previous)
         case let .batch(ops):
             var inverses: [Op] = []
             for o in ops { inverses.append(try apply(o, in: db)) }

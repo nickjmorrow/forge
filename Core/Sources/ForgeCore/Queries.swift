@@ -52,6 +52,13 @@ extension Forge {
 }
 
 extension Forge {
+    /// All guides in display order.
+    public func guides() throws -> [Guide] {
+        try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM guides ORDER BY position, title COLLATE NOCASE, id").map(Store.decodeGuide)
+        }
+    }
+
     /// All routines in display order.
     public func routines() throws -> [Routine] {
         try db.read { db in

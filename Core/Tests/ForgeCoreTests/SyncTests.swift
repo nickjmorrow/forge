@@ -41,6 +41,34 @@ private struct World {
 private func routine(_ id: String, _ title: String) -> Routine { Routine(id: id, title: title, createdAt: 1, updatedAt: 1) }
 
 @Suite struct SyncTests {
+    @Test func aGuideSyncsAndTheLaterEditWins() async throws {
+        let w = try World()
+        func guide(_ title: String) -> Guide {
+            Guide(id: "g", title: title, sections: [GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles", cue: "Both ways")])], createdAt: 1, updatedAt: 1)
+        }
+        try w.a.perform([.putGuide(guide("Start"))], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b)
+        #expect(try w.b.guide(id: "g") == guide("Start"))
+        w.clockB.tick(1000); try w.b.perform([.putGuide(guide("From B"))], author: .me)
+        w.clockA.tick(5000); try w.a.perform([.putGuide(guide("From A, later"))], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b); try await w.sync(w.a)
+        #expect(try w.a.guide(id: "g")?.title == "From A, later")
+        #expect(try w.b.guide(id: "g")?.title == "From A, later")
+    }
+
+    @Test func deletingAGuideAfterAnotherDevicesEditRemovesItEverywhere() async throws {
+        let w = try World()
+        let g = Guide(id: "g", title: "Start", createdAt: 1, updatedAt: 1)
+        try w.a.perform([.putGuide(g)], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b)
+        var edited = g; edited.title = "Edited on B"
+        w.clockB.tick(1000); try w.b.perform([.putGuide(edited)], author: .me)
+        w.clockA.tick(5000); try w.a.perform([.deleteGuide(id: "g")], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b); try await w.sync(w.a)
+        #expect(try w.a.guides().isEmpty)
+        #expect(try w.b.guides().isEmpty)
+    }
+
     @Test func aChangeOnOneDeviceAppearsOnTheOther() async throws {
         let w = try World()
         try w.a.perform([.putExercise(Exercise(id: "e", name: "Squat")), .putRoutine(routine("r", "Legs"))], author: .me)

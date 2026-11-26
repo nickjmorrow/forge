@@ -22,7 +22,7 @@ import Testing
     @Test func inMemoryStoreRunsMigrations() throws {
         let forge = try Forge.inMemory()
         let names = try forge.db.read { try String.fetchAll($0, sql: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'grdb_%'") }
-        let expected: Set<String> = ["exercises", "routines", "routine_exercises", "routine_sets", "workouts", "workout_exercises", "workout_sets", "bodyweight", "ops", "recovery", "clocks", "meta"]
+        let expected: Set<String> = ["exercises", "routines", "routine_exercises", "routine_sets", "workouts", "workout_exercises", "workout_sets", "bodyweight", "ops", "recovery", "clocks", "meta", "guides"]
         #expect(Set(names) == expected)
     }
 }
