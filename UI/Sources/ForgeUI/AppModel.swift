@@ -10,6 +10,7 @@ public final class AppModel {
     public let forge: Forge
     public private(set) var exercises: [Exercise] = []
     public private(set) var routines: [Routine] = []
+    public private(set) var guides: [Guide] = []
     public private(set) var workouts: [Workout] = []
     public private(set) var bodyweights: [BodyweightEntry] = []
     public private(set) var session: WorkoutSession?
@@ -76,6 +77,7 @@ public final class AppModel {
         do {
             exercises = try forge.exercises()
             routines = try forge.routines()
+            guides = try forge.guides()
             workouts = try forge.workouts(limit: 1000)
             bodyweights = try forge.bodyweights()
             nameByID = Dictionary(exercises.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
@@ -226,6 +228,30 @@ public final class AppModel {
 
     public func deleteRoutine(id: String) { act { try forge.perform([.deleteRoutine(id: id)], author: .me) } }
     public func reorderRoutines(_ ids: [String]) { act { try forge.reorderRoutines(ids, author: .me) } }
+
+    // MARK: guides
+
+    /// Saves the guide tidied up (see `Guide.normalized`). Returns false, with `lastError` set, when it has no title or a step has no name.
+    @discardableResult
+    public func saveGuide(_ g: Guide) -> Bool {
+        var saved = false
+        act {
+            var edited = try g.normalized()
+            edited.updatedAt = Forge.nowMillis()
+            try forge.perform([.putGuide(edited)], author: .me)
+            saved = true
+        }
+        return saved
+    }
+
+    /// A copy at the end of the list, named "<title> copy".
+    public func duplicateGuide(id: String) {
+        guard let g = guides.first(where: { $0.id == id }) else { return }
+        saveGuide(Guide(title: g.title + " copy", notes: g.notes, position: guides.count, sections: g.sections))
+    }
+
+    public func deleteGuide(id: String) { act { try forge.perform([.deleteGuide(id: id)], author: .me) } }
+    public func reorderGuides(_ ids: [String]) { act { try forge.reorderGuides(ids, author: .me) } }
 
     // MARK: Sync
 

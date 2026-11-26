@@ -28,6 +28,50 @@ private final class Flag: @unchecked Sendable { var raised = false }
         #expect(m.name(for: "gone") == "Deleted exercise")
     }
 
+    private func guide(_ id: String, _ title: String, position: Int = 0) -> Guide {
+        Guide(id: id, title: title, position: position, sections: [GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles")])], createdAt: 1, updatedAt: 1)
+    }
+
+    @Test func savingAGuideReloadsItTrimmed() throws {
+        let m = try model()
+        #expect(m.saveGuide(Guide(id: "g", title: "  Warm-up ", notes: " ", sections: [GuideSection(title: "A", steps: [GuideStep(name: " One ", cue: "")])])))
+        #expect(m.guides.map(\.title) == ["Warm-up"])
+        #expect(m.guides[0].notes == nil && m.guides[0].sections[0].steps == [GuideStep(name: "One")])
+        #expect(m.lastError == nil)
+    }
+
+    @Test func savingAGuideWithABlankTitleOrStepSetsLastErrorAndSavesNothing() throws {
+        let m = try model()
+        #expect(m.saveGuide(Guide(id: "g", title: " ")) == false)
+        #expect(m.lastError == "a guide needs a title")
+        #expect(m.saveGuide(Guide(id: "g", title: "Ok", sections: [GuideSection(steps: [GuideStep(name: "")])])) == false)
+        #expect(m.guides.isEmpty)
+    }
+
+    @Test func duplicateGuideAppendsACopy() throws {
+        let m = try model()
+        m.saveGuide(guide("g", "Warm-up"))
+        m.duplicateGuide(id: "g")
+        #expect(m.guides.map(\.title) == ["Warm-up", "Warm-up copy"])
+        #expect(m.guides[1].id != "g" && m.guides[1].position == 1 && m.guides[1].sections == m.guides[0].sections)
+    }
+
+    @Test func deleteAndReorderGuides() throws {
+        let m = try model()
+        m.saveGuide(guide("a", "A", position: 0)); m.saveGuide(guide("b", "B", position: 1)); m.saveGuide(guide("c", "C", position: 2))
+        m.reorderGuides(["c", "a", "b"])
+        #expect(m.guides.map(\.id) == ["c", "a", "b"])
+        m.deleteGuide(id: "a")
+        #expect(m.guides.map(\.id) == ["c", "b"])
+    }
+
+    @Test func aGuideSavedElsewhereAppearsOnReload() throws {
+        let m = try model()
+        try m.forge.perform([.putGuide(guide("g", "From Claude"))], author: .claude)
+        m.reload()
+        #expect(m.guides.map(\.title) == ["From Claude"])
+    }
+
     @Test func starterLibraryHasUniqueNamesMusclesAndLoadsOnce() throws {
         let names = StarterLibrary.exercises.map(\.name)
         #expect(names.count >= 40 && Set(names).count == names.count)
