@@ -75,4 +75,68 @@ private func sample(_ id: String = "g1", _ title: String = "Warm-up", position: 
         let old = #"{"version":1,"exportedAt":"2026-01-01T00:00:00Z","exercises":[],"routines":[],"workouts":[],"bodyweight":[],"recovery":[]}"#
         #expect(try JSONDecoder().decode(ForgeExport.self, from: Data(old.utf8)).guides.isEmpty)
     }
+
+    // MARK: input and reorder
+
+    private func input(_ json: String) throws -> GuideInput { try JSONDecoder().decode(GuideInput.self, from: Data(json.utf8)) }
+
+    @Test func putGuideCreatesLastAndKeepsCreatedAtOnReplace() throws {
+        let clock = TestClock(1000)
+        let f = try Forge.inMemory(clock: { clock.now })
+        try f.putGuide(try input(#"{"title":"First","sections":[]}"#), author: .claude)
+        let second = try f.putGuide(try input(#"{"title":"Second","notes":"slow","sections":[{"title":"A","steps":[{"name":"One","cue":"c"}]}]}"#), author: .claude)
+        #expect(second.position == 1 && second.createdAt == 1000 && second.notes == "slow")
+        clock.tick()
+        let replaced = try f.putGuide(try input(#"{"id":"\#(second.id)","title":"Second, renamed","sections":[{"steps":[{"name":"Two"}]}]}"#), author: .claude)
+        #expect(replaced.createdAt == 1000 && replaced.updatedAt == 2000 && replaced.position == 1)
+        #expect(replaced.notes == nil)
+        #expect(replaced.sections == [GuideSection(title: "", steps: [GuideStep(name: "Two")])])
+        #expect(try f.guides().map(\.title) == ["First", "Second, renamed"])
+    }
+
+    @Test func putGuideTrimsAndNilsBlanks() throws {
+        let f = try Forge.inMemory()
+        let g = try f.putGuide(try input(#"{"title":"  Warm-up ","notes":"","sections":[{"title":" Arms ","steps":[{"name":" Wrist circles ","cue":"  "}]}]}"#), author: .me)
+        #expect(g.title == "Warm-up" && g.notes == nil)
+        #expect(g.sections == [GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles", cue: nil)])])
+    }
+
+    @Test(arguments: [#"{"title":"   ","sections":[]}"#, #"{"title":"Ok","sections":[{"title":"A","steps":[{"name":" \n"}]}]}"#])
+    func putGuideRejectsBlankTitleAndBlankStepName(_ json: String) throws {
+        let f = try Forge.inMemory()
+        #expect(throws: ForgeError.self) { try f.putGuide(try input(json), author: .me) }
+        #expect(try f.guides().isEmpty)
+    }
+
+    @Test func aRawPutWithABlankTitleIsStoredAsGiven() throws {
+        // Validation belongs to the input path; ops replayed by sync and undo must never be refused.
+        let f = try Forge.inMemory()
+        try f.perform([.putGuide(Guide(id: "g", title: "", createdAt: 1, updatedAt: 1))], author: .me)
+        #expect(try f.guide(id: "g")?.title == "")
+    }
+
+    private func three() throws -> Forge {
+        let f = try Forge.inMemory()
+        try f.perform([.putGuide(sample("g1", "One", position: 0)), .putGuide(sample("g2", "Two", position: 1)), .putGuide(sample("g3", "Three", position: 2))], author: .me)
+        return f
+    }
+
+    @Test func reorderGuidesRewritesPositions() throws {
+        let f = try three()
+        try f.reorderGuides(["g3", "g1", "g2"], author: .claude)
+        #expect(try f.guides().map(\.id) == ["g3", "g1", "g2"])
+        #expect(try f.guides().map(\.position) == [0, 1, 2])
+    }
+
+    @Test(arguments: [["g1"], ["g1", "g2", "g3", "gX"], ["g1", "g1", "g2"]])
+    func reorderGuidesRejectsMissingExtraAndDuplicateIds(_ ids: [String]) throws {
+        let f = try three()
+        #expect(throws: ForgeError.self) { try f.reorderGuides(ids, author: .claude) }
+        #expect(try f.guides().map(\.id) == ["g1", "g2", "g3"])
+    }
+
+    @Test func reorderGuidesWithNoGuidesIsRejected() throws {
+        let f = try Forge.inMemory()
+        #expect(throws: ForgeError.invalid("there are no guides to reorder")) { try f.reorderGuides([], author: .claude) }
+    }
 }
