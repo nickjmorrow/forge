@@ -122,8 +122,10 @@ public struct Workout: Codable, Sendable, Equatable, Identifiable {
 public struct GuideStep: Codable, Sendable, Equatable {
     public var name: String
     public var cue: String?
+    /// A looping drawing of the movement, if one has been made for it.
+    public var figure: Figure?
 
-    public init(name: String, cue: String? = nil) { self.name = name; self.cue = cue }
+    public init(name: String, cue: String? = nil, figure: Figure? = nil) { self.name = name; self.cue = cue; self.figure = figure }
 }
 
 public struct GuideSection: Codable, Sendable, Equatable {

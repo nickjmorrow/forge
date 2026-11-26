@@ -16,12 +16,13 @@ public struct GuideInput: Codable, Sendable {
     public struct Step: Codable, Sendable {
         public var name: String
         public var cue: String?
+        public var figure: Figure?
     }
 }
 
 extension Guide {
     /// The guide as it should be saved: surrounding whitespace removed, empty notes and cues dropped.
-    /// A blank title or step name is refused.
+    /// A blank title or step name, or a figure that can't be drawn, is refused.
     public func normalized() throws -> Guide {
         func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
         func optional(_ s: String?) -> String? { s.map(trimmed).flatMap { $0.isEmpty ? nil : $0 } }
@@ -33,7 +34,8 @@ extension Guide {
             GuideSection(title: trimmed(section.title), steps: try section.steps.map { step in
                 let name = trimmed(step.name)
                 guard !name.isEmpty else { throw ForgeError.invalid("every step in a guide needs a name") }
-                return GuideStep(name: name, cue: optional(step.cue))
+                try step.figure?.validate()
+                return GuideStep(name: name, cue: optional(step.cue), figure: step.figure)
             })
         }
         return g
@@ -48,7 +50,7 @@ extension Forge {
         let existing = try input.id.flatMap { try guide(id: $0) }
         let guide = try Guide(id: input.id ?? UUID().uuidString, title: input.title, notes: input.notes,
                               position: try input.position ?? existing?.position ?? guides().count,
-                              sections: input.sections.map { s in GuideSection(title: s.title ?? "", steps: s.steps.map { GuideStep(name: $0.name, cue: $0.cue) }) },
+                              sections: input.sections.map { s in GuideSection(title: s.title ?? "", steps: s.steps.map { GuideStep(name: $0.name, cue: $0.cue, figure: $0.figure) }) },
                               createdAt: existing?.createdAt ?? now, updatedAt: now).normalized()
         try perform([.putGuide(guide)], author: author)
         return guide
