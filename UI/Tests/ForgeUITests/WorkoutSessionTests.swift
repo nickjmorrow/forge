@@ -592,6 +592,38 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         #expect(s.stopwatch == nil)
     }
 
+    @Test func pausedTimeIsNotCounted() throws {
+        let (_, s) = try holdSession()
+        s.startStopwatch(exercise: 0, now: t0)
+        s.pauseStopwatch(now: t0.addingTimeInterval(10))
+        #expect(s.stopwatch?.isPaused == true)
+        #expect(s.stopwatch?.elapsedSeconds(now: t0.addingTimeInterval(100)) == 10)
+        s.resumeStopwatch(now: t0.addingTimeInterval(100))
+        #expect(s.stopwatch?.isPaused == false)
+        s.pauseStopwatch(now: t0.addingTimeInterval(105))
+        s.resumeStopwatch(now: t0.addingTimeInterval(200))
+        s.stopStopwatch(now: t0.addingTimeInterval(207))
+        #expect(s.workout.exercises[0].sets[0].durationSeconds == 22)
+    }
+
+    @Test func stoppingWhilePausedKeepsTheTimeSoFar() throws {
+        let (_, s) = try holdSession()
+        s.startStopwatch(exercise: 0, now: t0)
+        s.pauseStopwatch(now: t0.addingTimeInterval(10))
+        s.stopStopwatch(now: t0.addingTimeInterval(500))
+        #expect(s.stopwatch == nil)
+        #expect(s.workout.exercises[0].sets[0].durationSeconds == 10)
+    }
+
+    @Test func pausingTwiceOrResumingWhileRunningChangesNothing() throws {
+        let (_, s) = try holdSession()
+        s.startStopwatch(exercise: 0, now: t0)
+        s.resumeStopwatch(now: t0.addingTimeInterval(5))
+        s.pauseStopwatch(now: t0.addingTimeInterval(10))
+        s.pauseStopwatch(now: t0.addingTimeInterval(50))
+        #expect(s.stopwatch?.elapsedSeconds(now: t0.addingTimeInterval(60)) == 10)
+    }
+
     @Test func finishingWritesAChangedHoldTimeIntoTheRoutine() throws {
         let (f, s) = try holdSession()
         s.update(exercise: 0, set: 0) { $0.durationSeconds = 45 }

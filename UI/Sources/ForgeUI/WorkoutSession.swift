@@ -21,7 +21,16 @@ public struct FinishSummary: Equatable {
 /// A stopwatch counting up on one exercise, stored as its start time so it stays correct while the app is suspended.
 public struct ExerciseStopwatch: Equatable, Sendable {
     public var blockID: UUID
-    public var startedAt: Date
+    /// When the current stretch began; nil while paused.
+    public var startedAt: Date?
+    /// Time counted in the stretches before a pause.
+    public var bankedSeconds: TimeInterval = 0
+
+    public var isPaused: Bool { startedAt == nil }
+
+    public func elapsedSeconds(now: Date) -> Int {
+        max(0, Int((bankedSeconds + (startedAt.map { now.timeIntervalSince($0) } ?? 0)).rounded()))
+    }
 }
 
 /// A workout being logged. Every change is written to the draft store so a killed app resumes where it left off.
@@ -306,6 +315,18 @@ public final class WorkoutSession {
         stopwatch = ExerciseStopwatch(blockID: blockIDs[index], startedAt: now)
     }
 
+    /// Holds the stopwatch at its time so far (a break mid-run); the break isn't counted.
+    public func pauseStopwatch(now: Date = Date()) {
+        guard let startedAt = stopwatch?.startedAt else { return }
+        stopwatch?.bankedSeconds += now.timeIntervalSince(startedAt)
+        stopwatch?.startedAt = nil
+    }
+
+    public func resumeStopwatch(now: Date = Date()) {
+        guard stopwatch?.isPaused == true else { return }
+        stopwatch?.startedAt = now
+    }
+
     /// Stops the stopwatch and writes the elapsed time into the exercise's first set that isn't done (a new set when all are).
     /// The set is left unticked, so a distance can still be typed.
     public func stopStopwatch(now: Date = Date()) {
@@ -317,7 +338,7 @@ public final class WorkoutSession {
             setIDs[index].append(UUID())
         }
         let set = workout.exercises[index].sets.firstIndex { !$0.completed }!
-        workout.exercises[index].sets[set].durationSeconds = max(0, Int(now.timeIntervalSince(running.startedAt).rounded()))
+        workout.exercises[index].sets[set].durationSeconds = running.elapsedSeconds(now: now)
         revision += 1
         persist()
     }

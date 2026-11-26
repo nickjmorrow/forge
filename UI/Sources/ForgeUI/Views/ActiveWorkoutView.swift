@@ -35,7 +35,7 @@ public struct ActiveWorkoutView: View {
                                      alternatives: (block.alternatives ?? []).compactMap { id in model.exercise(for: id).map { Alternative(id: id, name: $0.name) } },
                                      aim: session.workout.isOffDay ? nil : Aim.text(block: block, previous: session.previous[block.exerciseID] ?? [],
                                                                                     tracking: exercise?.tracking ?? .weightReps, stepKg: model.weightStepKg, unit: model.unit),
-                                     stopwatchStartedAt: session.stopwatch?.blockID == row.id ? session.stopwatch?.startedAt : nil,
+                                     stopwatch: session.stopwatch?.blockID == row.id ? session.stopwatch : nil,
                                      name: model.name(for: block.exerciseID),
                                      caption: [exercise?.primaryMuscle.map(Muscles.title), exercise?.equipment.map(Muscles.title)].compactMap { $0 }.joined(separator: " · "),
                                      tracking: exercise?.tracking ?? .weightReps, unit: model.unit, defaultRest: model.defaultRestSeconds,
@@ -211,8 +211,8 @@ private struct ExerciseCard: View, Equatable {
     let alternatives: [Alternative]
     /// What the exercise's rep range asks for today; nil when it has none.
     let aim: String?
-    /// When this exercise's stopwatch started; nil while it isn't running.
-    let stopwatchStartedAt: Date?
+    /// This exercise's stopwatch, running or paused; nil when it has none going.
+    let stopwatch: ExerciseStopwatch?
     let name: String
     let caption: String
     let tracking: TrackingType
@@ -223,7 +223,7 @@ private struct ExerciseCard: View, Equatable {
     /// Everything the card shows; the session and the closure are how it acts, not what it displays.
     static func == (a: ExerciseCard, b: ExerciseCard) -> Bool {
         a.blockID == b.blockID && a.index == b.index && a.count == b.count && a.block == b.block && a.setIDs == b.setIDs && a.previous == b.previous
-            && a.alternatives == b.alternatives && a.aim == b.aim && a.stopwatchStartedAt == b.stopwatchStartedAt && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
+            && a.alternatives == b.alternatives && a.aim == b.aim && a.stopwatch == b.stopwatch && a.name == b.name && a.caption == b.caption && a.tracking == b.tracking && a.unit == b.unit && a.defaultRest == b.defaultRest
     }
 
     var body: some View {
@@ -303,15 +303,26 @@ private struct ExerciseCard: View, Equatable {
 
     /// Timed exercises (a run, a hold) get a stopwatch; stopping it writes the time into the next set that isn't done.
     @ViewBuilder private var stopwatchRow: some View {
-        if let startedAt = stopwatchStartedAt {
+        if let stopwatch {
             HStack(spacing: 10) {
-                TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                    Text(Units.clock(seconds: Int(context.date.timeIntervalSince(startedAt))))
-                        .font(.title.weight(.bold).monospacedDigit()).foregroundStyle(Theme.accent)
-                        .contentTransition(.numericText())
+                if let startedAt = stopwatch.startedAt {
+                    TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                        Text(Units.clock(seconds: stopwatch.elapsedSeconds(now: context.date)))
+                            .font(.title.weight(.bold).monospacedDigit()).foregroundStyle(Theme.accent)
+                            .contentTransition(.numericText())
+                    }
+                    .accessibilityLabel("Stopwatch")
+                } else {
+                    Text(Units.clock(seconds: stopwatch.elapsedSeconds(now: Date())))
+                        .font(.title.weight(.bold).monospacedDigit()).foregroundStyle(Theme.dim)
+                        .accessibilityLabel("Stopwatch, paused")
                 }
-                .accessibilityLabel("Stopwatch")
                 Spacer()
+                if stopwatch.isPaused {
+                    Button("Resume") { session.resumeStopwatch() }.buttonStyle(QuietButtonStyle(fills: false))
+                } else {
+                    Button("Pause") { session.pauseStopwatch() }.buttonStyle(QuietButtonStyle(fills: false))
+                }
                 Button("Stop") { session.stopStopwatch() }.buttonStyle(AccentButtonStyle(compact: true))
             }
         } else {
