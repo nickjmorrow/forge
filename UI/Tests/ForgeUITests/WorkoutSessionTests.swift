@@ -429,15 +429,15 @@ private final class SpyAlerts: RestAlerting {
 
 private final class RecordingStore: DraftStore, @unchecked Sendable {
     private let lock = NSLock()
-    private(set) var saves: [Workout] = []
+    private(set) var saves: [WorkoutDraft] = []
     private(set) var clears = 0
     private(set) var savedOnMainThread = false
-    func save(_ workout: Workout) {
+    func save(_ draft: WorkoutDraft) {
         lock.lock(); defer { lock.unlock() }
-        saves.append(workout)
+        saves.append(draft)
         if Thread.isMainThread { savedOnMainThread = true }
     }
-    func load() -> Workout? { lock.lock(); defer { lock.unlock() }; return saves.last }
+    func load() -> WorkoutDraft? { lock.lock(); defer { lock.unlock() }; return saves.last }
     func clear() { lock.lock(); defer { lock.unlock() }; clears += 1; saves.removeAll() }
     var saveCount: Int { lock.lock(); defer { lock.unlock() }; return saves.count }
 }
@@ -455,7 +455,7 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         for i in 0..<200 { s.update(exercise: 0, set: i % 3) { $0.reps = i % 15 } }
         s.flushDraft()
         #expect(store.saveCount - before <= 2)                          // not 200
-        #expect(store.load() == s.workout)                              // and the last one is the latest state
+        #expect(store.load()?.workout == s.workout)                             // and the last one is the latest state
     }
 
     @Test func tickingASetIsSavedWithoutWaitingForTheTypingDelay() throws {
@@ -463,7 +463,7 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         let s = try started(store)
         s.toggleComplete(exercise: 0, set: 1, now: t0)
         s.flushDraft()
-        #expect(store.load()?.exercises[0].sets[1].completed == true)
+        #expect(store.load()?.workout.exercises[0].sets[1].completed == true)
     }
 
     @Test func writesNeverHappenOnTheMainThread() throws {
@@ -555,13 +555,13 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
 }
 
 @MainActor @Suite struct StopwatchTests {
-    private func holdSession() throws -> (Forge, WorkoutSession) {
+    private func holdSession(store: DraftStore? = nil) throws -> (Forge, WorkoutSession) {
         let f = try lib()
         try f.perform([.putExercise(Exercise(id: "hold", name: "Hold", tracking: .weightDuration)),
                        .putRoutine(Routine(id: "r2", title: "Holds", exercises: [
                            ExerciseBlock(exerciseID: "hold", sets: [SetEntry(weightKg: 50, durationSeconds: 30), SetEntry(weightKg: 50, durationSeconds: 30)])],
                            createdAt: 1, updatedAt: 1))], author: .me)
-        return (f, try WorkoutSession.start(routine: try f.routine(id: "r2"), forge: f, store: nil, now: t0))
+        return (f, try WorkoutSession.start(routine: try f.routine(id: "r2"), forge: f, store: store, now: t0))
     }
 
     @Test func stoppingWritesElapsedTimeIntoTheFirstSetNotDone() throws {
@@ -622,6 +622,38 @@ private final class RecordingStore: DraftStore, @unchecked Sendable {
         s.pauseStopwatch(now: t0.addingTimeInterval(10))
         s.pauseStopwatch(now: t0.addingTimeInterval(50))
         #expect(s.stopwatch?.elapsedSeconds(now: t0.addingTimeInterval(60)) == 10)
+    }
+
+    @Test func aRunningStopwatchSurvivesARestart() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory() + "draft-\(UUID().uuidString).json")
+        let (f, s) = try holdSession(store: FileDraftStore(url: url))
+        s.startStopwatch(exercise: 0, now: t0)
+        s.flushDraft()
+        let restored = try #require(WorkoutSession.restore(forge: f, store: FileDraftStore(url: url)))
+        #expect(restored.stopwatch?.blockID == restored.blockIDs[0])
+        restored.stopStopwatch(now: t0.addingTimeInterval(300))
+        #expect(restored.workout.exercises[0].sets[0].durationSeconds == 300)
+        restored.flushDraft()
+        #expect(WorkoutSession.restore(forge: f, store: FileDraftStore(url: url))?.stopwatch == nil)
+    }
+
+    @Test func aPausedStopwatchSurvivesARestart() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory() + "draft-\(UUID().uuidString).json")
+        let (f, s) = try holdSession(store: FileDraftStore(url: url))
+        s.startStopwatch(exercise: 0, now: t0)
+        s.pauseStopwatch(now: t0.addingTimeInterval(10))
+        s.flushDraft()
+        let restored = try #require(WorkoutSession.restore(forge: f, store: FileDraftStore(url: url)))
+        #expect(restored.stopwatch?.isPaused == true)
+        #expect(restored.stopwatch?.elapsedSeconds(now: t0.addingTimeInterval(900)) == 10)
+    }
+
+    @Test func aDraftSavedBeforeStopwatchesWereKeptStillLoads() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory() + "draft-\(UUID().uuidString).json")
+        let (f, s) = try holdSession()
+        try JSONEncoder().encode(s.workout).write(to: url)
+        let restored = try #require(WorkoutSession.restore(forge: f, store: FileDraftStore(url: url)))
+        #expect(restored.workout == s.workout && restored.stopwatch == nil)
     }
 
     @Test func finishingWritesAChangedHoldTimeIntoTheRoutine() throws {

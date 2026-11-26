@@ -44,8 +44,8 @@ import Testing
         let f = try Self.bigDatabase(workouts: 5)
         final class CountingStore: DraftStore, @unchecked Sendable {
             var saves = 0
-            func save(_ workout: Workout) { saves += 1; Thread.sleep(forTimeInterval: 0.002) }   // a draft write costs a couple of ms
-            func load() -> Workout? { nil }
+            func save(_ draft: WorkoutDraft) { saves += 1; Thread.sleep(forTimeInterval: 0.002) }   // a draft write costs a couple of ms
+            func load() -> WorkoutDraft? { nil }
             func clear() {}
         }
         let store = CountingStore()

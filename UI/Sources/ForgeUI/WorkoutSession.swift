@@ -40,7 +40,7 @@ public final class WorkoutSession {
     /// What was done last time, by exercise id.
     public private(set) var previous: [String: [SetEntry]] = [:]
     public private(set) var rest = RestTimer()
-    /// The stopwatch that is running, if any (one at a time; not saved in the draft).
+    /// The stopwatch that is running or paused, if any (one at a time; saved in the draft).
     public private(set) var stopwatch: ExerciseStopwatch?
     /// Bumps when rows are added, removed or reordered, so screens holding typed text can rebuild their fields.
     public private(set) var revision = 0
@@ -82,8 +82,14 @@ public final class WorkoutSession {
 
     public static func restore(forge: Forge, store: DraftStore, defaultRestSeconds: Int = 90, restAlerts: RestAlerting? = nil,
                                weightStepKg: Double = WorkoutSession.defaultWeightStepKg) -> WorkoutSession? {
-        store.load().map {
-            WorkoutSession(forge: forge, workout: $0, store: store, defaultRestSeconds: defaultRestSeconds, restAlerts: restAlerts, weightStepKg: weightStepKg)
+        store.load().map { draft in
+            let session = WorkoutSession(forge: forge, workout: draft.workout, store: store, defaultRestSeconds: defaultRestSeconds,
+                                         restAlerts: restAlerts, weightStepKg: weightStepKg)
+            if let saved = draft.stopwatch, session.blockIDs.indices.contains(saved.exerciseIndex) {
+                session.stopwatch = ExerciseStopwatch(blockID: session.blockIDs[saved.exerciseIndex], startedAt: saved.startedAt,
+                                                      bankedSeconds: saved.bankedSeconds)
+            }
+            return session
         }
     }
 
@@ -115,10 +121,18 @@ public final class WorkoutSession {
     static func millis(_ d: Date) -> Int64 { Int64(d.timeIntervalSince1970 * 1000) }
 
     /// Saved promptly, off the main thread.
-    private func persist() { saver?.saveNow(workout) }
+    private func persist() { saver?.saveNow(draft) }
 
     /// For typing: a burst of keystrokes becomes one write.
-    private func persistTyping() { saver?.saveSoon(workout) }
+    private func persistTyping() { saver?.saveSoon(draft) }
+
+    /// The stopwatch is saved by where its exercise sits, since block ids are made fresh on each launch.
+    private var draft: WorkoutDraft {
+        let saved = stopwatch.flatMap { running in
+            blockIndex(running.blockID).map { WorkoutDraft.Stopwatch(exerciseIndex: $0, startedAt: running.startedAt, bankedSeconds: running.bankedSeconds) }
+        }
+        return WorkoutDraft(workout: workout, stopwatch: saved)
+    }
 
     /// Waits until the draft on disk matches what is on screen. Call when the app is leaving the foreground.
     public func flushDraft() { saver?.flush() }
@@ -313,6 +327,7 @@ public final class WorkoutSession {
         guard workout.exercises.indices.contains(index) else { return }
         stopStopwatch(now: now)
         stopwatch = ExerciseStopwatch(blockID: blockIDs[index], startedAt: now)
+        persist()
     }
 
     /// Holds the stopwatch at its time so far (a break mid-run); the break isn't counted.
@@ -320,11 +335,13 @@ public final class WorkoutSession {
         guard let startedAt = stopwatch?.startedAt else { return }
         stopwatch?.bankedSeconds += now.timeIntervalSince(startedAt)
         stopwatch?.startedAt = nil
+        persist()
     }
 
     public func resumeStopwatch(now: Date = Date()) {
         guard stopwatch?.isPaused == true else { return }
         stopwatch?.startedAt = now
+        persist()
     }
 
     /// Stops the stopwatch and writes the elapsed time into the exercise's first set that isn't done (a new set when all are).

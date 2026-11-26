@@ -7,7 +7,7 @@ final class DraftSaver: @unchecked Sendable {
     private let store: DraftStore
     private let queue = DispatchQueue(label: "forge.draft-saver", qos: .utility)
     private let lock = NSLock()
-    private var pending: Workout?
+    private var pending: WorkoutDraft?
     private var delayedWriteScheduled = false
     private let typingDelay: TimeInterval
 
@@ -17,9 +17,9 @@ final class DraftSaver: @unchecked Sendable {
     }
 
     /// For edits that arrive in bursts (typing): the latest state is written after a short pause.
-    func saveSoon(_ workout: Workout) {
+    func saveSoon(_ draft: WorkoutDraft) {
         lock.lock()
-        pending = workout
+        pending = draft
         let schedule = !delayedWriteScheduled
         delayedWriteScheduled = true
         lock.unlock()
@@ -27,9 +27,9 @@ final class DraftSaver: @unchecked Sendable {
     }
 
     /// For edits that must not be lost (a set ticked off, an exercise added): written as soon as the queue is free.
-    func saveNow(_ workout: Workout) {
+    func saveNow(_ draft: WorkoutDraft) {
         lock.lock()
-        pending = workout
+        pending = draft
         lock.unlock()
         queue.async { [self] in writePending() }
     }
@@ -46,10 +46,10 @@ final class DraftSaver: @unchecked Sendable {
 
     private func writePending() {
         lock.lock()
-        let workout = pending
+        let draft = pending
         pending = nil
         delayedWriteScheduled = false
         lock.unlock()
-        if let workout { store.save(workout) }
+        if let draft { store.save(draft) }
     }
 }
