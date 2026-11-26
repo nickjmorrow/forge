@@ -42,11 +42,55 @@ import Testing
 
     private var sampleGuide: Guide {
         Guide(id: "g", title: "Warm-up", notes: "5 to 10 reps in each direction", sections: [
-            GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles"), GuideStep(name: "Elbow circles", cue: "Slow, as wide as is comfortable."),
+            GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles", figure: sampleFigure), GuideStep(name: "Elbow circles", cue: "Slow, as wide as is comfortable."),
                                                 GuideStep(name: "Arm swings", cue: "Demo: https://example.com/swings")]),
             GuideSection(title: "", steps: [GuideStep(name: "Ankle circles")]),
             GuideSection(title: "Empty section", steps: []),
         ], createdAt: 1, updatedAt: 1)
+    }
+
+    private var sampleFigure: Figure {
+        Figure(duration: 4, parts: [
+            .init(kind: .ring, points: ["c", "r"], tone: .accent), .init(kind: .line, points: ["hip", "knee", "foot"]),
+            .init(kind: .curve, points: ["hip", "mid", "sh"]), .init(kind: .head, points: ["hd"]), .init(kind: .line, points: ["sh", "hand"]),
+            .init(kind: .dot, points: ["hand"], tone: .accent),
+        ], frames: [
+            .init(points: ["c": [70, 50], "r": [8, 12], "hip": [50, 50], "knee": [50, 70], "foot": [50, 90], "mid": [50, 38], "sh": [50, 26], "hd": [50, 14], "hand": [70, 38]]),
+            .init(points: ["mid": [58, 50], "sh": [60, 66], "hd": [60, 78], "hand": [70, 62]], back: [4]),
+        ])
+    }
+
+    @Test func aFigureRendersAtAFixedMoment() throws {
+        try png(FigureView(figure: sampleFigure, phase: 0.5).frame(width: 200, height: 200), width: 200, height: 200, name: "figure.png")
+    }
+
+    @Test func partsBehindTheBodyArePaintedFirst() {
+        let order = FigureDrawing.order(sampleFigure, pose: sampleFigure.pose(at: 0.5))
+        #expect(order.map(\.isBack) == [true, false, false, false, false, false])
+        #expect(order.first?.part.points == ["sh", "hand"])
+        #expect(FigureDrawing.order(sampleFigure, pose: sampleFigure.pose(at: 0)).map(\.part) == sampleFigure.parts)
+    }
+
+    /// Set FORGE_FIGURES_JSON to a file of `{"name": figure}` to check a set of figures and (with FORGE_SNAPSHOT_DIR) draw them
+    /// as sheets, four moments of each to a row.
+    @Test func aLibraryOfFiguresValidatesAndRenders() throws {
+        guard let path = ProcessInfo.processInfo.environment["FORGE_FIGURES_JSON"] else { return }
+        let library = try JSONDecoder().decode([String: Figure].self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+        let names = library.keys.sorted()
+        for name in names { try library[name]!.validate() }
+        let perSheet = 6
+        for (sheet, start) in stride(from: 0, to: names.count, by: perSheet).enumerated() {
+            let rows = Array(names[start..<min(start + perSheet, names.count)])
+            let view = VStack(alignment: .leading, spacing: 6) {
+                ForEach(rows, id: \.self) { name in
+                    HStack(spacing: 6) {
+                        Text(name).font(.caption).foregroundStyle(Theme.text).frame(width: 110, alignment: .leading)
+                        ForEach(0..<4, id: \.self) { i in FigureView(figure: library[name]!, phase: Double(i) / 4).frame(width: 130, height: 130) }
+                    }
+                }
+            }.padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(Theme.background)
+            try png(view, width: 670, height: CGFloat(rows.count) * 136 + 16, name: "figures-\(sheet).png")
+        }
     }
 
     private func png<V: View>(_ view: V, width: CGFloat, height: CGFloat, name: String) throws {

@@ -42,6 +42,8 @@ public struct Figure: Codable, Sendable, Equatable {
             case dot
             /// A dashed oval: centred on the first point, the second point holds its two radii.
             case ring
+            /// A thin line between two points for the floor, a wall or a counter.
+            case floor
         }
 
         public init(kind: Kind, points: [String], tone: Tone = .main) { self.kind = kind; self.points = points; self.tone = tone }
@@ -120,7 +122,7 @@ public struct Figure: Codable, Sendable, Equatable {
             case .line: 2...12
             case .curve: 3...3
             case .head, .dot: 1...1
-            case .ring: 2...2
+            case .ring, .floor: 2...2
             }
             guard wanted.contains(part.points.count) else { throw fail("has a \(part.kind.rawValue) with the wrong number of points") }
             for name in part.points where first.points[name] == nil { throw fail("uses point “\(name)”, which the first frame does not place") }

@@ -4,6 +4,8 @@ import SwiftUI
 /// A guide laid out to read: its note, then each section with its steps and their cues.
 struct GuideContent: View {
     let guide: Guide
+    /// Steps without a figure keep its space when others have one, so the names line up.
+    private var hasFigures: Bool { guide.sections.contains { $0.steps.contains { $0.figure != nil } } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -26,15 +28,18 @@ struct GuideContent: View {
                         }
                         ForEach(Array(section.steps.enumerated()), id: \.offset) { i, step in
                             if i > 0 { Rectangle().fill(Theme.line.opacity(0.5)).frame(height: 1).padding(.leading, 14) }
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(step.name).font(.body).foregroundStyle(Theme.text)
-                                if let cue = step.cue {
-                                    Text(GuideEdits.linked(cue)).font(.subheadline).foregroundStyle(Theme.dim)
+                            HStack(alignment: .center, spacing: 12) {
+                                if hasFigures { StepFigure(figure: step.figure) }
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(step.name).font(.body).foregroundStyle(Theme.text)
+                                    if let cue = step.cue {
+                                        Text(GuideEdits.linked(cue)).font(.subheadline).foregroundStyle(Theme.dim)
+                                    }
                                 }
+                                .accessibilityElement(children: .combine)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14).padding(.vertical, 11)
-                            .accessibilityElement(children: .combine)
                         }
                     }
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.card))
@@ -43,6 +48,28 @@ struct GuideContent: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+    }
+}
+
+/// The drawing beside a step. Tapping it shows it large.
+private struct StepFigure: View {
+    let figure: Figure?
+    @State private var isEnlarged = false
+    static let side: CGFloat = 64
+
+    var body: some View {
+        if let figure {
+            Button { isEnlarged = true } label: { FigureView(figure: figure).frame(width: Self.side, height: Self.side) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show the movement larger")
+                .popover(isPresented: $isEnlarged) {
+                    FigureView(figure: figure).frame(width: 260, height: 260).padding(12)
+                        .background(Theme.bar)
+                        .presentationCompactAdaptation(.popover)
+                }
+        } else {
+            Color.clear.frame(width: Self.side, height: 1)
+        }
     }
 }
 

@@ -59,6 +59,7 @@ private func bend(easing: Figure.Easing = .ease) -> Figure {
         { (f: inout Figure) in f.parts[0].points = ["hip", "nowhere"] },
         { (f: inout Figure) in f.parts[1].points = ["hip", "sh"] },
         { (f: inout Figure) in f.parts[2].points = [] },
+        { (f: inout Figure) in f.parts.append(.init(kind: .floor, points: ["hip"])) },
         { (f: inout Figure) in f.frames[1].points["sh"] = [1] },
         { (f: inout Figure) in f.frames[1].points["sh"] = [.nan, 2] },
         { (f: inout Figure) in f.frames[1].points["sh"] = [5000, 2] },
