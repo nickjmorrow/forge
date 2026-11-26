@@ -92,4 +92,57 @@ private func shape(_ g: Guide) -> [String] { g.sections.map { $0.title + "[" + $
         draft.sections[0].steps = [GuideStep(name: "", cue: "Slowly")]
         #expect(GuideEdits.canSave(draft) == false)
     }
+
+    @Test func tidyingDropsSectionsLeftUntitledAndEmpty() {
+        var draft = guide
+        draft.sections.append(GuideSection())
+        draft.sections.append(GuideSection(title: " ", steps: [GuideStep(name: "")]))
+        #expect(GuideEdits.tidied(draft) == guide)
+        #expect(GuideEdits.changed(draft, from: guide) == false)
+        draft.sections.append(GuideSection(title: "Named but empty"))
+        #expect(GuideEdits.tidied(draft).sections.count == 3)
+        #expect(GuideEdits.tidied(Guide.blank(position: 0)).sections.isEmpty)
+    }
+
+    // MARK: what Save should do
+
+    private func edited(_ g: Guide, title: String) -> Guide { var e = g; e.title = title; return e }
+
+    @Test func savingWithNothingChangedJustCloses() {
+        #expect(GuideEdits.saveAction(draft: guide, baseline: guide, current: guide) == .close)
+        // Even when the guide moved on elsewhere: an untouched draft must never be written over it.
+        #expect(GuideEdits.saveAction(draft: guide, baseline: guide, current: edited(guide, title: "Newer")) == .close)
+        #expect(GuideEdits.saveAction(draft: guide, baseline: guide, current: nil) == .close)
+    }
+
+    @Test func savingAnEditOfAnUnchangedGuideSaves() {
+        #expect(GuideEdits.saveAction(draft: edited(guide, title: "Mine"), baseline: guide, current: guide) == .save)
+    }
+
+    @Test func aReorderOfTheListElsewhereIsNotAConflict() {
+        var moved = guide; moved.position = 4; moved.updatedAt = 99
+        #expect(GuideEdits.saveAction(draft: edited(guide, title: "Mine"), baseline: guide, current: moved) == .save)
+    }
+
+    @Test func savingOverAGuideChangedElsewhereAsksFirst() {
+        var theirs = guide; theirs.sections[1].steps.append(GuideStep(name: "b2"))
+        #expect(GuideEdits.saveAction(draft: edited(guide, title: "Mine"), baseline: guide, current: theirs) == .changedElsewhere)
+    }
+
+    @Test func savingAGuideDeletedElsewhereAsksFirst() {
+        #expect(GuideEdits.saveAction(draft: edited(guide, title: "Mine"), baseline: guide, current: nil) == .deletedElsewhere)
+    }
+
+    @Test func aNewGuideAlwaysSaves() {
+        #expect(GuideEdits.saveAction(draft: edited(.blank(position: 0), title: "New"), baseline: nil, current: nil) == .save)
+    }
+
+    @Test func whatIsSavedKeepsThePlaceInTheListItHasNow() {
+        var moved = guide; moved.position = 4
+        let saved = GuideEdits.toSave(edited(guide, title: " Mine "), current: moved, newPosition: 9)
+        #expect(saved.position == 4 && saved.title == " Mine ")
+        #expect(GuideEdits.toSave(edited(guide, title: "Mine"), current: nil, newPosition: 9).position == 9)
+        var withEmpty = guide; withEmpty.sections.append(GuideSection())
+        #expect(GuideEdits.toSave(withEmpty, current: guide, newPosition: 0).sections.count == 2)
+    }
 }

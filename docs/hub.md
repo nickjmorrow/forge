@@ -43,6 +43,10 @@ To reach it from a device where Tailscale DNS is off, use the hub's tailnet IP a
 - **Apps:** Settings → Sync → hub address (`https://<hub>.<tailnet>.ts.net/forge`) and that device's token.
 - **CLI:** `forge sync-setup --url https://<hub>.<tailnet>.ts.net/forge --token <token>`, then `forge sync`.
 
+## Updating
+
+Update every copy that syncs (the hub's CLI, each app, any other CLI) before using a feature that adds a new kind of record, such as guides. A copy running an older build cannot read the new change: it skips it for good, and its change list and undo stop working until it is updated. If that happens, update it, then save the affected records again from an up-to-date copy so they are sent once more.
+
 ## Claude on the server
 
 Point the MCP server at the hub's database so Claude edits the same data everyone syncs:

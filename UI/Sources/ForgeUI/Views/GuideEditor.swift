@@ -10,10 +10,10 @@ struct GuideEditor: View {
     @FocusState private var focus: GuideEdits.Row?
 
     var body: some View {
-        Form {
+        container {
             Section {
-                TextField("Guide name", text: $draft.title)
-                TextField("Note, e.g. reps or hold time", text: Binding(get: { draft.notes ?? "" }, set: { draft.notes = $0 }), axis: .vertical)
+                field("Guide name", text: $draft.title).font(.headline)
+                field("Note, e.g. reps or hold time", text: Binding(get: { draft.notes ?? "" }, set: { draft.notes = $0 }), axis: .vertical)
             }.listRowBackground(Theme.card)
             if GuideEdits.rows(draft).count > 2 {
                 Section {
@@ -24,7 +24,6 @@ struct GuideEditor: View {
             }
             if reordering { reorderList } else { sections }
         }
-        .formStyle(.grouped)
         .themedList()
         #if os(iOS)
         .environment(\.editMode, .constant(reordering ? .active : .inactive))     // shows the drag handles
@@ -35,6 +34,27 @@ struct GuideEditor: View {
             Button("Delete Section", role: .destructive) { if let s = deletingSection { removeSection(s) } }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    /// A grouped form on the phone. On the Mac a list, where rows can be dragged to reorder (as the routine screen does).
+    @ViewBuilder private func container<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        #if os(macOS)
+        List { content() }.listStyle(.inset)
+        #else
+        Form { content() }.formStyle(.grouped)
+        #endif
+    }
+
+    /// A text field whose description is a placeholder inside it, never a label beside it.
+    private func field(_ prompt: String, text: Binding<String>, axis: Axis = .horizontal) -> some View {
+        TextField("", text: text, prompt: Text(prompt).foregroundStyle(Theme.faint), axis: axis)
+            .labelsHidden()
+            .accessibilityLabel(prompt)
+            #if os(macOS)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.field))
+            #endif
     }
 
     private var reorderList: some View {
@@ -60,14 +80,14 @@ struct GuideEditor: View {
     @ViewBuilder private var sections: some View {
         ForEach(Array(draft.sections.indices), id: \.self) { s in
             Section {
-                TextField("Section name (optional)", text: sectionTitle(s)).font(.headline)
+                field("Section name (optional)", text: sectionTitle(s)).font(.headline)
                 ForEach(Array(draft.sections[s].steps.indices), id: \.self) { i in
                     HStack(alignment: .top, spacing: 8) {
                         VStack(alignment: .leading, spacing: 4) {
-                            TextField("Step", text: stepName(s, i))
+                            field("Step", text: stepName(s, i))
                                 .focused($focus, equals: .step(section: s, step: i))
                                 .onSubmit { if i == draft.sections[s].steps.count - 1, !stepName(s, i).wrappedValue.isEmpty { addStep(to: s) } }
-                            TextField("Cue: how to do it (optional)", text: stepCue(s, i), axis: .vertical)
+                            field("Cue: how to do it (optional)", text: stepCue(s, i), axis: .vertical)
                                 .font(.subheadline).foregroundStyle(Theme.dim)
                         }
                         #if os(macOS)
@@ -128,5 +148,22 @@ struct GuideEditor: View {
 
     private func stepCue(_ s: Int, _ i: Int) -> Binding<String> {
         Binding(get: { has(s, i) ? draft.sections[s].steps[i].cue ?? "" : "" }, set: { if has(s, i) { draft.sections[s].steps[i].cue = $0 } })
+    }
+}
+
+extension View {
+    /// Asked when Save would overwrite a change made elsewhere, or bring back a guide deleted elsewhere, while this draft was open.
+    func guideSaveConflict(_ conflict: Binding<GuideEdits.SaveAction?>, saveAnyway: @escaping () -> Void, discard: @escaping () -> Void) -> some View {
+        let deleted = conflict.wrappedValue == .deletedElsewhere
+        return confirmationDialog(deleted ? "This guide was deleted while you were editing" : "This guide was changed while you were editing",
+                                  isPresented: Binding(get: { conflict.wrappedValue != nil }, set: { if !$0 { conflict.wrappedValue = nil } }),
+                                  titleVisibility: .visible) {
+            Button(deleted ? "Save It Anyway" : "Replace With My Version", role: .destructive, action: saveAnyway)
+            Button("Discard My Edits", action: discard)
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text(deleted ? "It was deleted on another device or by Claude. Saving brings it back with your edits."
+                         : "Another device or Claude saved a newer version. Saving yours replaces it everywhere.")
+        }
     }
 }

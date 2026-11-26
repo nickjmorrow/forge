@@ -76,6 +76,14 @@ struct GuideView: View {
     /// What the draft started as, to tell whether there is anything to lose.
     @State private var baseline: Guide?
     @State private var confirmDiscard = false
+    @State private var conflict: GuideEdits.SaveAction?
+
+    /// A guide to read, found by id each time so it follows changes made elsewhere and outlives its row in a list.
+    init(id: String, allowsEditing: Bool) {
+        self.id = id
+        self.allowsEditing = allowsEditing
+        editorOnly = false
+    }
 
     init(guide: Guide?, allowsEditing: Bool = true, startsEditing: Bool = false) {
         id = guide?.id
@@ -106,7 +114,7 @@ struct GuideView: View {
         .toolbar {
             if let draft {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { if hasChanges { confirmDiscard = true } else { stopEditing() } } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save(draft) }.disabled(!GuideEdits.canSave(draft)) }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { save(draft, force: false) }.disabled(!GuideEdits.canSave(draft)) }
             } else if allowsEditing, let guide = current {
                 ToolbarItem(placement: .primaryAction) { Button("Edit") { draft = guide; baseline = guide } }
             }
@@ -115,16 +123,33 @@ struct GuideView: View {
             Button("Discard Changes", role: .destructive) { stopEditing() }
             Button("Keep Editing", role: .cancel) {}
         }
+        .guideSaveConflict($conflict, saveAnyway: { if let draft { save(draft, force: true) } }, discard: stopEditing)
     }
 
-    private func save(_ draft: Guide) {
-        var guide = GuideEdits.tidied(draft)
-        if id == nil { guide.position = model.guides.count }
-        if model.saveGuide(guide) { stopEditing() }
+    private func save(_ draft: Guide, force: Bool) {
+        let action = force ? .save : GuideEdits.saveAction(draft: draft, baseline: id == nil ? nil : baseline, current: current)
+        switch action {
+        case .close: stopEditing()
+        case .save:
+            if model.saveGuide(GuideEdits.toSave(draft, current: current, newPosition: model.guides.count)) { stopEditing() }
+        case .changedElsewhere, .deletedElsewhere: conflict = action
+        }
     }
 
     private func stopEditing() {
         if editorOnly { dismiss() } else { draft = nil; baseline = nil }
+    }
+}
+
+/// Where a row in a list of guides leads. Declared once per navigation stack with `guideDestinations()`.
+struct GuideRoute: Hashable {
+    let id: String
+    let editable: Bool
+}
+
+extension View {
+    func guideDestinations() -> some View {
+        navigationDestination(for: GuideRoute.self) { GuideView(id: $0.id, allowsEditing: $0.editable) }
     }
 }
 
@@ -137,11 +162,12 @@ struct GuideListSheet: View {
         NavigationStack {
             List {
                 ForEach(model.guides) { guide in
-                    NavigationLink { GuideView(guide: guide, allowsEditing: false) } label: { GuideRow(guide: guide) }
+                    NavigationLink(value: GuideRoute(id: guide.id, editable: false)) { GuideRow(guide: guide) }
                 }
                 .listRowBackground(Theme.card)
             }
             .themedList()
+            .guideDestinations()
             .navigationTitle("Mobility & Flexibility")
             .inlineTitle()
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -161,7 +187,7 @@ struct GuidesHomeSection: View {
     var body: some View {
         Section("Mobility & Flexibility") {
             ForEach(model.guides) { guide in
-                NavigationLink { GuideView(guide: guide) } label: { GuideRow(guide: guide) }
+                NavigationLink(value: GuideRoute(id: guide.id, editable: true)) { GuideRow(guide: guide) }
                     .contextMenu {
                         Button("Edit", systemImage: "pencil") { editing = EditTarget(guide: guide) }
                         Button("Duplicate", systemImage: "plus.square.on.square") { model.duplicateGuide(id: guide.id) }

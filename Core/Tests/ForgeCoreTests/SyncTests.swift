@@ -44,7 +44,7 @@ private func routine(_ id: String, _ title: String) -> Routine { Routine(id: id,
     @Test func aGuideSyncsAndTheLaterEditWins() async throws {
         let w = try World()
         func guide(_ title: String) -> Guide {
-            Guide(id: "g", title: title, sections: [GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles", cue: "Both ways")])], createdAt: 1, updatedAt: 1)
+            Guide(id: "g", title: title, sections: [GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles", cue: "Say \"hi\"\nline two 🙂 https://example.com/x?t=1")])], createdAt: 1, updatedAt: 1)
         }
         try w.a.perform([.putGuide(guide("Start"))], author: .me)
         try await w.sync(w.a); try await w.sync(w.b)
@@ -54,6 +54,19 @@ private func routine(_ id: String, _ title: String) -> Routine { Routine(id: id,
         try await w.sync(w.a); try await w.sync(w.b); try await w.sync(w.a)
         #expect(try w.a.guide(id: "g")?.title == "From A, later")
         #expect(try w.b.guide(id: "g")?.title == "From A, later")
+    }
+
+    @Test func editingAGuideAfterAnotherDeviceDeletedItBringsItBackEverywhere() async throws {
+        let w = try World()
+        let g = Guide(id: "g", title: "Start", createdAt: 1, updatedAt: 1)
+        try w.a.perform([.putGuide(g)], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b)
+        var edited = g; edited.title = "Edited on B, later"
+        w.clockA.tick(1000); try w.a.perform([.deleteGuide(id: "g")], author: .me)
+        w.clockB.tick(5000); try w.b.perform([.putGuide(edited)], author: .me)
+        try await w.sync(w.a); try await w.sync(w.b); try await w.sync(w.a)
+        #expect(try w.a.guides() == [edited])
+        #expect(try w.b.guides() == [edited])
     }
 
     @Test func deletingAGuideAfterAnotherDevicesEditRemovesItEverywhere() async throws {

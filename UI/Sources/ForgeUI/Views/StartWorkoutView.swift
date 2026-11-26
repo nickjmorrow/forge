@@ -66,6 +66,7 @@ public struct StartWorkoutView: View {
                 }
             }
             .themedList()
+            .guideDestinations()
             .navigationTitle("Workout")
             .toolbar {
                 #if os(iOS)
