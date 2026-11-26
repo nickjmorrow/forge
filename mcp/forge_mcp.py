@@ -44,7 +44,7 @@ ROUTINE_SHAPE = ("A routine object: {title, id?, folder?, position?, exercises: 
                  "With an existing id it replaces that routine.")
 WORKOUT_SHAPE = ("A workout object: {title, startedAt (ISO-8601, required), endedAt?, notes?, routineID?, offDay?: true for a deliberately lighter session (kept in history, never used as 'last time'), id?, exercises: same shape as routines}. "
                  "Sets default to completed. With an existing id it replaces that workout.")
-GUIDE_SHAPE = ("A guide object: {title, id?, notes? (one line for the whole guide, e.g. reps or hold time), position?, sections: [{title?, steps: [{name, cue? (how to do it)}]}]}. "
+GUIDE_SHAPE = ("A guide object: {title, id?, notes? (one line for the whole guide, e.g. reps or hold time), position?, sections: [{title?, steps: [{name, cue? (how to do it), figure? (a looping line drawing of the movement: send it back exactly as you read it, because leaving it out removes it)}]}]}. "
                "With an existing id it replaces that guide, so send the whole guide.")
 EXERCISE_SHAPE = ("An exercise object: {name, equipment?, primaryMuscle?, secondaryMuscles?: [..], tracking?: weightReps|repsOnly|weightedBodyweight|assistedBodyweight|duration|weightDuration|distance|distanceDuration, id?}. "
                   "With an existing id only the given fields change.")

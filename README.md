@@ -105,13 +105,13 @@ forge sync-setup --url https://… --token …  &&  forge sync
 ## Tests
 
 ```bash
-swift test --package-path Core                  # 143 tests
-swift test --package-path UI                    # 169 tests
+swift test --package-path Core                  # 154 tests
+swift test --package-path UI                    # 178 tests
 swift test --package-path CLI                   # 23 tests
 swift build --package-path CLI -c release && python3 -m unittest discover -s mcp   # 14 tests, uses the release CLI
 ```
 
-About 350 tests in all. Core covers the op log and undo, routine edits and exercise merges, guides, stats, Hevy import, recovery, export, the read-only SQL guard, loading a thousand workouts quickly, and sync convergence (concurrent edits, deletes against edits, two connections to one file). UI covers the workout session, rest timer and units, search ranking, dashboard numbers, the history calendar, reordering inside a guide, rendered dashboard and guide snapshots, and performance budgets for reloading the app model and typing into a live workout. CLI and MCP tests run the real commands and a real hub end to end against temporary databases.
+About 370 tests in all. Core covers the op log and undo, routine edits and exercise merges, guides, stats, Hevy import, recovery, export, the read-only SQL guard, loading a thousand workouts quickly, and sync convergence (concurrent edits, deletes against edits, two connections to one file). UI covers the workout session, rest timer and units, search ranking, dashboard numbers, the history calendar, reordering inside a guide, rendered dashboard, guide and figure snapshots, and performance budgets for reloading the app model and typing into a live workout. CLI and MCP tests run the real commands and a real hub end to end against temporary databases.
 
 ## Project layout
 
