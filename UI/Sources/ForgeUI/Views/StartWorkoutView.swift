@@ -1,7 +1,7 @@
 import ForgeCore
 import SwiftUI
 
-/// Home of the Workout tab when nothing is in progress: routines to start from, then the last weeks at a glance.
+/// Home of the Workout tab when nothing is in progress: routines to start from, guides to read, then the last weeks at a glance.
 public struct StartWorkoutView: View {
     @Environment(AppModel.self) private var model
     @State private var editing: EditTarget?
@@ -57,6 +57,7 @@ public struct StartWorkoutView: View {
                     }
                     Button { editing = EditTarget(routine: nil) } label: { Label("New Routine", systemImage: "plus") }
                 }.listRowBackground(Theme.card)
+                GuidesHomeSection()
                 if !model.workouts.isEmpty {
                     Section {
                         WeeklyActivityView()

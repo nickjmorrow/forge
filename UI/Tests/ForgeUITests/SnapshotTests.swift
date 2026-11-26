@@ -39,4 +39,31 @@ import Testing
             try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: dir).appendingPathComponent("dashboard.png"))
         }
     }
+
+    private var sampleGuide: Guide {
+        Guide(id: "g", title: "Warm-up", notes: "5 to 10 reps in each direction", sections: [
+            GuideSection(title: "Arms", steps: [GuideStep(name: "Wrist circles"), GuideStep(name: "Elbow circles", cue: "Slow, as wide as is comfortable."),
+                                                GuideStep(name: "Arm swings", cue: "Demo: https://example.com/swings")]),
+            GuideSection(title: "", steps: [GuideStep(name: "Ankle circles")]),
+            GuideSection(title: "Empty section", steps: []),
+        ], createdAt: 1, updatedAt: 1)
+    }
+
+    private func png<V: View>(_ view: V, width: CGFloat, height: CGFloat, name: String) throws {
+        let renderer = ImageRenderer(content: view.frame(width: width, height: height).environment(\.colorScheme, .dark).forgeTheme())
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        #expect(image.width == Int(width))
+        if let dir = ProcessInfo.processInfo.environment["FORGE_SNAPSHOT_DIR"] {
+            try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
+        }
+    }
+
+    @Test func guideRendersToAnImage() throws {
+        try png(GuideContent(guide: sampleGuide).padding(16), width: 390, height: 700, name: "guide.png")
+    }
+
+    @Test func anEmptyGuideRendersToAnImage() throws {
+        try png(GuideContent(guide: Guide(title: "Empty")).padding(16), width: 390, height: 300, name: "guide-empty.png")
+    }
 }

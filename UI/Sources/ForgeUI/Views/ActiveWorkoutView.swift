@@ -15,6 +15,7 @@ public struct ActiveWorkoutView: View {
     @State private var swapIndex: Int?
     @State private var confirmLeave = false
     @State private var message: String?
+    @State private var showGuides = false
 
     public init(session: WorkoutSession) { self.session = session }
 
@@ -67,6 +68,11 @@ public struct ActiveWorkoutView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { leave() } label: { Label("Leave workout", systemImage: "xmark") }
                 }
+                if !model.guides.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showGuides = true } label: { Label("Mobility & Flexibility", systemImage: "book") }
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Finish") { finish() }.bold()
                 }
@@ -77,6 +83,7 @@ public struct ActiveWorkoutView: View {
                 }
                 #endif
             }
+            .sheet(isPresented: $showGuides) { GuideListSheet() }
             .sheet(isPresented: $showPicker) { ExercisePickerView { session.addExercise($0) } }
             .sheet(item: Binding(get: { swapIndex.map(SwapTarget.init) }, set: { swapIndex = $0?.index })) { target in
                 ExercisePickerView { session.swapExercise(at: target.index, with: $0) }
