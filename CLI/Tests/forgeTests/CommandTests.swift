@@ -135,6 +135,40 @@ private func json(_ s: String) throws -> [String: Any] {
         #expect(await Runner.run(["routine", "list", "--db", path]).out.contains("Push"))
     }
 
+    @Test func guidePutListShowReorderAndDelete() async throws {
+        let path = tempDB()
+        _ = try seed(path)
+        let first = await Runner.run(["guide", "put", "--json", #"{"title":"Warm-up","notes":"5 each way","sections":[{"title":"Arms","steps":[{"name":"Wrist circles","cue":"Both ways"}]}]}"#, "--db", path])
+        #expect(first.code == 0, "\(first.err)")
+        let a = try #require(try json(first.out)["id"] as? String)
+        let second = await Runner.run(["guide", "put", "--json", #"{"title":"Cool-down","sections":[]}"#, "--db", path])
+        let b = try #require(try json(second.out)["id"] as? String)
+
+        let listed = try #require(JSONSerialization.jsonObject(with: Data(await Runner.run(["guide", "list", "--db", path]).out.utf8)) as? [[String: Any]])
+        #expect(listed.map { $0["title"] as? String } == ["Warm-up", "Cool-down"])
+        let steps = ((listed[0]["sections"] as? [[String: Any]])?[0]["steps"] as? [[String: Any]]) ?? []
+        #expect(steps.first?["name"] as? String == "Wrist circles" && steps.first?["cue"] as? String == "Both ways")
+
+        #expect(try json(await Runner.run(["guide", "show", a, "--db", path]).out)["notes"] as? String == "5 each way")
+        #expect(await Runner.run(["guide", "reorder", b, a, "--db", path]).code == 0)
+        #expect(try Forge.open(path: path, device: "test").guides().map(\.id) == [b, a])
+
+        #expect(await Runner.run(["guide", "delete", a, "--db", path]).code == 0)
+        let gone = await Runner.run(["guide", "show", a, "--db", path])
+        #expect(gone.code == 1 && gone.out.isEmpty)
+        #expect(try json(gone.err)["error"] as? String == "not found: guide \(a)")
+    }
+
+    @Test(arguments: [#"{"title":" ","sections":[]}"#, #"{"title":"X","sections":[{"steps":[{"name":""}]}]}"#, #"{"title":"X"}"#])
+    func guidePutRejectsBadInputAsAJSONError(_ body: String) async throws {
+        let path = tempDB()
+        _ = try seed(path)
+        let r = await Runner.run(["guide", "put", "--json", body, "--db", path])
+        #expect(r.code == 1 && r.out.isEmpty)
+        #expect(try json(r.err)["error"] != nil)
+        #expect(try Forge.open(path: path, device: "test").guides().isEmpty)
+    }
+
     @Test func routinePutWithUnknownExerciseIsAJSONError() async throws {
         let path = tempDB()
         _ = try seed(path)

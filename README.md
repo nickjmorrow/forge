@@ -9,6 +9,7 @@ A strength-training tracker for iPhone and Mac, with a JSON command line and an 
 - **Log workouts on iPhone**: start from a routine, see what you lifted last time, tick off sets, and get a rest timer with a lock-screen Live Activity and a bell that rings even with the phone locked. An in-progress workout is saved to disk as you type, so it survives the app being killed.
 - **Progress and off days**: give an exercise a rep range (say 8–12) and each workout starts one rep up from last time, then at the next weight once every set reaches the top. Mark a workout as an off day to lift at 80%: it is kept in history but never changes the routine or what "last time" means. A routine slot can list alternatives ("this or that"): during a workout, tap one to do it instead.
 - **Review and plan on Mac**: a dashboard (this week at a glance, training calendar, recent records, sleep against training), per-exercise progress charts, and routines laid out whole and edited in place with drag-to-reorder.
+- **Guides for mobility and stretching**: step lists kept beside your routines, grouped into sections, each step with an optional cue. They are for reading, not logging: open one from the Workout tab, or from a button during a workout, and edit it on either device.
 - **Progress stats**: estimated one-rep max (Epley), personal records recomputed from history, weekly working sets per muscle, and a forgiving exercise search that tolerates typos and abbreviations ("bnch", "extention").
 - **Every change is an undoable op**: all writes go through a log of typed operations with stored inverses. Undo is per author and refuses, rather than forces, when someone else has since edited the same thing.
 - **AI-safe agent interface**: the `forge` CLI and the MCP server expose everything the apps can do, including bulk edits with a preview step and read-only SQL. Deleting an exercise with history requires an explicit merge or force, so nothing is silently wiped.
@@ -93,6 +94,7 @@ forge routine remove-exercise Acme --preview        # see the effect first
 forge routine remove-exercise Acme                  # one undoable change
 forge exercise delete <id> --merge-into <other id>  # history moves; --force removes it everywhere
 forge routine put --json '{"title":"Push","exercises":[{"exercise":"Bench Press (Barbell)","sets":[{"weightLb":135,"reps":8}]}]}'
+forge guide put --json '{"title":"Warm-up","notes":"5 each way","sections":[{"title":"Arms","steps":[{"name":"Wrist circles","cue":"Both directions"}]}]}'
 forge stats prs <exercise id>
 forge sql "select name, count(*) from exercises group by 1"   # read-only; `forge schema` lists the tables
 forge undo                                          # reverses the latest change by --author

@@ -5,8 +5,8 @@ import Foundation
 struct ForgeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "forge",
-        abstract: "Workout tracker data: exercises, routines, workouts, stats. Prints JSON.",
-        subcommands: [ExerciseGroup.self, RoutineGroup.self, WorkoutGroup.self, StatsGroup.self, BodyweightGroup.self, RecoveryGroup.self,
+        abstract: "Workout tracker data: exercises, routines, guides, workouts, stats. Prints JSON.",
+        subcommands: [ExerciseGroup.self, RoutineGroup.self, GuideGroup.self, WorkoutGroup.self, StatsGroup.self, BodyweightGroup.self, RecoveryGroup.self,
                       SchemaCommand.self, ExportCommand.self, SyncSetup.self, SyncCommand.self, SyncServe.self, SQLCommand.self, UndoCommand.self, ChangesCommand.self, ImportHevy.self])
 }
 
@@ -229,6 +229,46 @@ struct WorkoutView: Codable {
         exercises = w.exercises.map { RoutineView.Block(exerciseID: $0.exerciseID, name: names[$0.exerciseID] ?? $0.exerciseID, notes: $0.notes,
                                                         restSeconds: $0.restSeconds, supersetID: $0.supersetID, repsMin: $0.repsMin, repsMax: $0.repsMax, alternatives: $0.alternatives,
                                             alternativeNames: $0.alternatives?.map { names[$0] ?? $0 }, sets: $0.sets) }
+    }
+}
+
+// MARK: guides
+
+struct GuideGroup: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "guide", abstract: "Guides: step lists to read through (mobility, stretching). Never started or logged.",
+                                                    subcommands: [List.self, Show.self, Put.self, Delete.self, Reorder.self])
+
+    struct List: ParsableCommand {
+        @OptionGroup var global: GlobalOptions
+        func run() throws { try Output.json(try global.open().guides()) }
+    }
+
+    struct Show: ParsableCommand {
+        @OptionGroup var global: GlobalOptions
+        @Argument var id: String
+        func run() throws {
+            guard let guide = try global.open().guide(id: id) else { throw ForgeError.notFound("guide \(id)") }
+            try Output.json(guide)
+        }
+    }
+
+    struct Put: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Create a guide, or replace one by id, from JSON (always the whole guide). Fields: title, id, notes (a line for the whole guide), position, sections: [{title, steps: [{name, cue}]}].")
+        @OptionGroup var global: GlobalOptions
+        @Option(help: "The guide as JSON.") var json: String
+        func run() throws { try Output.json(try global.open().putGuide(try decodeJSON(GuideInput.self, json), author: global.author)) }
+    }
+
+    struct Delete: ParsableCommand {
+        @OptionGroup var global: GlobalOptions
+        @Argument var id: String
+        func run() throws { try Output.json(["changeId": try global.open().perform([.deleteGuide(id: id)], author: global.author)]) }
+    }
+
+    struct Reorder: ParsableCommand {
+        @OptionGroup var global: GlobalOptions
+        @Argument(help: "Every guide id, in the new order.") var ids: [String]
+        func run() throws { try Output.json(["changeId": try global.open().reorderGuides(ids, author: global.author)]) }
     }
 }
 

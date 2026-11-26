@@ -79,6 +79,31 @@ class McpTests(unittest.TestCase):
         hist = self.ok("exercise_history", id=bench)
         self.assertEqual(len(hist), 1)
 
+    def test_guides_round_trip(self):
+        a = self.ok("put_guide", guide={"title": "Warm-up", "notes": "5 each way", "sections": [
+            {"title": "Arms", "steps": [{"name": "Wrist circles", "cue": "Both ways"}, {"name": "Elbow circles"}]}]})
+        b = self.ok("put_guide", guide={"title": "Cool-down", "sections": []})
+        self.assertEqual([g["title"] for g in self.ok("list_guides")], ["Warm-up", "Cool-down"])
+        self.assertEqual(self.ok("get_guide", id=a["id"])["sections"][0]["steps"][0], {"name": "Wrist circles", "cue": "Both ways"})
+        a["sections"][0]["steps"].pop()
+        self.ok("put_guide", guide=a)
+        self.assertEqual(len(self.ok("get_guide", id=a["id"])["sections"][0]["steps"]), 1)
+        self.ok("undo_claude")
+        self.assertEqual(len(self.ok("get_guide", id=a["id"])["sections"][0]["steps"]), 2)
+        self.ok("reorder_guides", ids=[b["id"], a["id"]])
+        self.assertEqual([g["title"] for g in self.ok("list_guides")], ["Cool-down", "Warm-up"])
+        text, err = self.tool("put_guide", guide={"title": "Bad", "sections": [{"steps": [{"name": " "}]}]})
+        self.assertTrue(err)
+        self.assertIn("name", text)
+        self.ok("delete_guide", id=b["id"])
+        self.assertEqual([g["title"] for g in self.ok("list_guides")], ["Warm-up"])
+
+    def test_guide_tools_are_listed_and_the_intro_mentions_guides(self):
+        r = self.call("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}})
+        self.assertIn("guides", r["result"]["instructions"])
+        names = {t["name"] for t in self.call("tools/list")["result"]["tools"]}
+        self.assertTrue({"list_guides", "get_guide", "put_guide", "delete_guide", "reorder_guides"} <= names)
+
     def test_put_workout_then_prs_and_history(self):
         bench, _, _ = self.seed()
         self.ok("put_workout", workout={"title": "Chest", "startedAt": "2026-10-19T17:00:00Z", "endedAt": "2026-10-19T18:00:00Z",

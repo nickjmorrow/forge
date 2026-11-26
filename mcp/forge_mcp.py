@@ -14,7 +14,7 @@ PROTOCOL = "2025-06-18"
 FORGE = os.environ.get("FORGE_BIN") or shutil.which("forge") or os.path.expanduser("~/.local/bin/forge")
 
 INSTRUCTIONS = (
-    "Forge is the user's workout tracker (it replaces Hevy): exercise library, routines, logged workouts, bodyweight. "
+    "Forge is the user's workout tracker (it replaces Hevy): exercise library, routines, logged workouts, bodyweight, and guides (mobility and flexibility step lists, read for reference, not logged). "
     "Weights are stored in kg; give weightLb in inputs when the user speaks in pounds, and tell them pounds. "
     "Anything the app can do you can do, including deleting custom exercises. Everything you write is logged as Claude and undone with undo_claude. "
     "Before a bulk change (removing an exercise from every routine, merging exercises) use preview_remove_exercise or list the matches first and tell the user what will change. "
@@ -44,6 +44,8 @@ ROUTINE_SHAPE = ("A routine object: {title, id?, folder?, position?, exercises: 
                  "With an existing id it replaces that routine.")
 WORKOUT_SHAPE = ("A workout object: {title, startedAt (ISO-8601, required), endedAt?, notes?, routineID?, offDay?: true for a deliberately lighter session (kept in history, never used as 'last time'), id?, exercises: same shape as routines}. "
                  "Sets default to completed. With an existing id it replaces that workout.")
+GUIDE_SHAPE = ("A guide object: {title, id?, notes? (one line for the whole guide, e.g. reps or hold time), position?, sections: [{title?, steps: [{name, cue? (how to do it)}]}]}. "
+               "With an existing id it replaces that guide, so send the whole guide.")
 EXERCISE_SHAPE = ("An exercise object: {name, equipment?, primaryMuscle?, secondaryMuscles?: [..], tracking?: weightReps|repsOnly|weightedBodyweight|assistedBodyweight|duration|weightDuration|distance|distanceDuration, id?}. "
                   "With an existing id only the given fields change.")
 
@@ -65,6 +67,13 @@ TOOLS = {
     "delete_routine": (*S("Delete a routine. Past workouts from it are kept.", id=("string", "Routine id")), lambda a: ["routine", "delete", a["id"]]),
     "reorder_routines": (*S("Put the routines in a new order. Give every routine id exactly once.", ids=("array", "All routine ids in the new order")),
                          lambda a: ["routine", "reorder", "--"] + list(a["ids"])),
+    "list_guides": (*S("All guides in order: step lists to read through (mobility, stretching), each with sections of steps. They are reference only and never logged."), lambda a: ["guide", "list"]),
+    "get_guide": (*S("One guide.", id=("string", "Guide id")), lambda a: ["guide", "show", a["id"]]),
+    "put_guide": (*S("Create a guide or replace one (use it to add, change, remove or reorder steps and sections: read the guide, edit it, send it back whole).", guide=("object", GUIDE_SHAPE)),
+                  lambda a: put_json(["guide", "put"], a, "guide")),
+    "delete_guide": (*S("Delete a guide.", id=("string", "Guide id")), lambda a: ["guide", "delete", a["id"]]),
+    "reorder_guides": (*S("Put the guides in a new order. Give every guide id exactly once.", ids=("array", "All guide ids in the new order")),
+                       lambda a: ["guide", "reorder", "--"] + list(a["ids"])),
     "preview_remove_exercise": (*S("Which routines would lose which exercises if every exercise whose name contains any of these texts were removed. Changes nothing.",
                                    names=("array", "Name fragments, case-insensitive (e.g. ['Acme'])")),
                                 lambda a: ["routine", "remove-exercise", "--preview", "--"] + list(a["names"])),
@@ -98,7 +107,7 @@ TOOLS = {
 }
 
 
-READ_ONLY = {"list_exercises", "get_exercise", "list_routines", "get_routine", "list_workouts", "get_workout", "exercise_prs", "exercise_history",
+READ_ONLY = {"list_exercises", "get_exercise", "list_routines", "get_routine", "list_guides", "get_guide", "list_workouts", "get_workout", "exercise_prs", "exercise_history",
              "weekly_sets", "list_bodyweight", "list_recovery", "schema", "sql", "changes", "preview_remove_exercise"}
 AUTOSYNC = os.environ.get("FORGE_AUTOSYNC", "1") != "0"
 
